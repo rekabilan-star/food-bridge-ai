@@ -1,0 +1,85 @@
+enum UserRole { donor, ngo, admin, volunteer }
+
+class UserModel {
+  final String id;
+  final String email;
+  final String name;
+  final UserRole role;
+  final String phoneNumber;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
+  final String? profileImage;
+  
+  // NGO Specific Fields
+  final String? ngoRegistrationNumber;
+  final String? ngoCertificateUrl;
+  final String? ngoIdProofUrl;
+  final String? status; // pending, approved, rejected
+  
+  // New Features
+  final String? availabilityStatus; // Available, Busy, Offline
+  final double averageRating;
+  final int totalRatings;
+
+  UserModel({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.phoneNumber,
+    this.address,
+    this.latitude,
+    this.longitude,
+    this.profileImage,
+    this.ngoRegistrationNumber,
+    this.ngoCertificateUrl,
+    this.ngoIdProofUrl,
+    this.status,
+    this.availabilityStatus,
+    this.averageRating = 0.0,
+    this.totalRatings = 0,
+  });
+
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['_id'] ?? json['id'],
+      email: json['email'],
+      name: json['name'],
+      role: UserRole.values.firstWhere((e) => e.toString().split('.').last == json['role']),
+      phoneNumber: json['phoneNumber'],
+      address: json['address'],
+      latitude: json['latitude']?.toDouble(),
+      longitude: json['longitude']?.toDouble(),
+      profileImage: json['profileImage'],
+      ngoRegistrationNumber: json['ngoRegistrationNumber'],
+      ngoCertificateUrl: json['ngoCertificateUrl'],
+      ngoIdProofUrl: json['ngoIdProofUrl'],
+      status: json['status'],
+      availabilityStatus: json['availabilityStatus'],
+      averageRating: (json['averageRating'] ?? 0.0).toDouble(),
+      totalRatings: json['totalRatings'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'name': name,
+      'role': role.toString().split('.').last,
+      'phoneNumber': phoneNumber,
+      'address': address,
+      'latitude': latitude,
+      'longitude': longitude,
+      'profileImage': profileImage,
+      'ngoRegistrationNumber': ngoRegistrationNumber,
+      'ngoCertificateUrl': ngoCertificateUrl,
+      'ngoIdProofUrl': ngoIdProofUrl,
+      'status': status,
+      'availabilityStatus': availabilityStatus,
+      'averageRating': averageRating,
+      'totalRatings': totalRatings,
+    };
+  }
+}
