@@ -7,17 +7,27 @@ import 'presentation/viewmodels/emergency_viewmodel.dart';
 import 'presentation/viewmodels/chat_viewmodel.dart';
 import 'presentation/viewmodels/delivery_viewmodel.dart';
 import 'presentation/viewmodels/route_optimization_viewmodel.dart';
+import 'presentation/viewmodels/notification_viewmodel.dart';
 import 'core/providers/location_provider_v2.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/views/auth/login_screen.dart';
-import 'data/models/user_model.dart';
 
 import 'presentation/views/donor/donor_dashboard_screen.dart';
 import 'presentation/views/ngo/ngo_dashboard_screen.dart';
 import 'presentation/views/admin/admin_dashboard_screen.dart';
+import 'presentation/views/notifications/notification_center_screen.dart';
+import 'presentation/views/chat/chat_list_screen.dart';
+
+import 'presentation/views/common/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Requirement 8: Startup Error Handling
+  FlutterError.onError = (details) {
+    debugPrint('[STARTUP ERROR] ${details.exception}');
+  };
+
   runApp(
     MultiProvider(
       providers: [
@@ -28,6 +38,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => ChatViewModel()),
         ChangeNotifierProvider(create: (_) => DeliveryViewModel()),
         ChangeNotifierProvider(create: (_) => RouteOptimizationViewModel()),
+        ChangeNotifierProvider(create: (_) => NotificationViewModel()),
         ChangeNotifierProvider(create: (_) => LocationProviderV2()),
       ],
       child: const MyApp(),
@@ -40,39 +51,32 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Provider.of<AuthViewModel>(context, listen: false).checkLoginStatus(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'FoodBridge AI',
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
+      initialRoute: '/splash',
+      onGenerateRoute: (settings) {
+        Widget page;
+        switch (settings.name) {
+          case '/splash': page = const SplashScreen(); break;
+          case '/login': page = const LoginScreen(); break;
+          case '/donor-dashboard': page = const DonorDashboardScreen(); break;
+          case '/ngo-dashboard': page = const NgoDashboardScreen(); break;
+          case '/admin-dashboard': page = const AdminDashboardScreen(); break;
+          case '/notifications': page = const NotificationCenterScreen(); break;
+          case '/chats': page = const ChatListScreen(); break;
+          default: page = const LoginScreen();
         }
         
-        return Consumer<AuthViewModel>(
-          builder: (context, auth, _) {
-            String initialRoute = '/';
-            if (auth.user != null) {
-              if (auth.user!.role == UserRole.donor) {
-                initialRoute = '/donor-dashboard';
-              } else if (auth.user!.role == UserRole.ngo) {
-                initialRoute = '/ngo-dashboard';
-              }
-            }
-
-            return MaterialApp(
-              debugShowCheckedModeBanner: false,
-              title: 'FoodRescue AI',
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: ThemeMode.light,
-              initialRoute: initialRoute,
-              routes: {
-                '/': (context) => const LoginScreen(),
-                '/donor-dashboard': (context) => const DonorDashboardScreen(),
-                '/ngo-dashboard': (context) => const NgoDashboardScreen(),
-                '/admin-dashboard': (context) => const AdminDashboardScreen(),
-              },
-            );
+        return PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => page,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
           },
+          settings: settings,
         );
       },
     );

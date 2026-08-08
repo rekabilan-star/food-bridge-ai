@@ -55,7 +55,7 @@ class QualityChecklist {
   QualityChecklist({
     this.isFreshlyPrepared = false,
     this.isProperlyPacked = false,
-    this.foodType = 'Veg',
+    this.foodType = 'Cooked Meal',
     this.hasAllergens = false,
   });
 
@@ -63,16 +63,24 @@ class QualityChecklist {
     return QualityChecklist(
       isFreshlyPrepared: json['isFreshlyPrepared'] ?? false,
       isProperlyPacked: json['isProperlyPacked'] ?? false,
-      foodType: json['foodType'] ?? 'Veg',
+      foodType: json['foodType'] ?? 'Cooked Meal',
       hasAllergens: json['hasAllergens'] ?? false,
     );
   }
 
   Map<String, dynamic> toJson() {
+    String validFoodType = foodType;
+    if (validFoodType == 'Non-Vegetarian' || validFoodType == 'Non-Veg') {
+      validFoodType = 'Non-Veg';
+    } else if (validFoodType == 'Both') {
+      validFoodType = 'Both';
+    } else {
+      validFoodType = 'Veg';
+    }
     return {
       'isFreshlyPrepared': isFreshlyPrepared,
       'isProperlyPacked': isProperlyPacked,
-      'foodType': foodType,
+      'foodType': validFoodType,
       'hasAllergens': hasAllergens,
     };
   }

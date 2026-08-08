@@ -42,9 +42,7 @@ class LocationLoadingDialog extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("Retries: ${provider.retryCount}", style: const TextStyle(fontSize: 12, color: Colors.blue)),
-                    const SizedBox(width: 24),
-                    Text("Time: ${provider.elapsedSeconds}s", style: const TextStyle(fontSize: 12, color: Colors.orange)),
+                    Text("Time Elapsed: ${provider.elapsedSeconds}s", style: const TextStyle(fontSize: 12, color: Colors.orange)),
                   ],
                 ),
                 const SizedBox(height: 16),

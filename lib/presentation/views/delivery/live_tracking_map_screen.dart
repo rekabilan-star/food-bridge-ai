@@ -19,22 +19,31 @@ class LiveTrackingMapScreen extends StatefulWidget {
 class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
   final MapController _mapController = MapController();
   bool _followVolunteer = true;
+  late LiveMapViewModel _viewModel;
 
   @override
   void initState() {
     super.initState();
+    _viewModel = LiveMapViewModel();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = Provider.of<AuthViewModel>(context, listen: false);
-      final isVolunteer = auth.user!.role.toString().split('.').last == 'volunteer' || auth.user!.role.toString().split('.').last == 'ngo';
-      Provider.of<LiveMapViewModel>(context, listen: false)
-          .initTracking(widget.donation, isVolunteer);
+      final role = auth.user!.role.toString().split('.').last;
+      final isVolunteer = role == 'volunteer' || role == 'ngo';
+      _viewModel.initTracking(widget.donation, isVolunteer);
     });
   }
 
   @override
+  void dispose() {
+    _viewModel.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => LiveMapViewModel(),
+    return ChangeNotifierProvider.value(
+      value: _viewModel,
       child: Consumer<LiveMapViewModel>(
         builder: (context, model, _) {
           // Auto-follow logic

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../viewmodels/emergency_viewmodel.dart';
 import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/utils/ui_utils.dart';
+import '../../../core/providers/location_provider_v2.dart';
 
 class EmergencyRequestScreen extends StatefulWidget {
   const EmergencyRequestScreen({super.key});
@@ -25,6 +26,10 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
 
   void _submit() async {
     if (_formKey.currentState!.validate()) {
+      final locProvider = context.read<LocationProviderV2>();
+      final lat = locProvider.location?.latitude ?? 13.0827;
+      final lng = locProvider.location?.longitude ?? 80.2707;
+
       final success = await context.read<EmergencyViewModel>().createRequest(
         EmergencyRequestModel(
           id: '',
@@ -34,8 +39,8 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
           requiredMembers: int.parse(_membersController.text),
           foodType: _foodType,
           address: _addressController.text,
-          latitude: 13.0827, // Mock
-          longitude: 80.2707, // Mock
+          latitude: lat,
+          longitude: lng,
           requiredBefore: _requiredBefore,
           priority: _priority,
           status: 'active',

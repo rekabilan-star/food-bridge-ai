@@ -7,7 +7,19 @@ import '../../data/models/donation_model.dart';
 
 class DeliveryViewModel extends ChangeNotifier {
   final SocketService _socketService = SocketService();
-  
+  bool _disposed = false;
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _locationSubscription?.cancel();
+    super.dispose();
+  }
+
   DonationModel? _currentDonation;
   DonationModel? get currentDonation => _currentDonation;
 
@@ -38,6 +50,8 @@ class DeliveryViewModel extends ChangeNotifier {
   }
 
   void updateStatus(String status, String description) {
+    if (!_socketService.isConnected) return;
+
     _socketService.socket.emit('status_changed', {
       'donationId': _currentDonation?.id,
       'status': status,
@@ -45,7 +59,7 @@ class DeliveryViewModel extends ChangeNotifier {
     });
     if (_currentDonation != null) {
       _currentDonation = _currentDonation!.copyWith(status: status);
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -64,30 +78,32 @@ class DeliveryViewModel extends ChangeNotifier {
         distanceFilter: 5,
       ),
     ).listen((Position position) {
-      _socketService.updateLocation(
-        userId: userId,
-        donationId: donationId,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        heading: position.heading,
-        speed: position.speed,
-      );
+      if (_socketService.isConnected) {
+        _socketService.updateLocation(
+          userId: userId,
+          donationId: donationId,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          heading: position.heading,
+          speed: position.speed,
+        );
+      }
       
       _volunteerPosition = LatLng(position.latitude, position.longitude);
       _volunteerHeading = position.heading;
       _calculateDistanceAndEta();
-      notifyListeners();
+      _safeNotify();
     });
   }
 
   void _listenForUpdates() {
     _socketService.onLocationUpdated((data) {
-      double lat = data['latitude'];
-      double lng = data['longitude'];
-      _volunteerHeading = data['heading']?.toDouble() ?? 0;
+      double lat = data['latitude']?.toDouble() ?? 0.0;
+      double lng = data['longitude']?.toDouble() ?? 0.0;
+      _volunteerHeading = data['heading']?.toDouble() ?? 0.0;
       _volunteerPosition = LatLng(lat, lng);
       _calculateDistanceAndEta();
-      notifyListeners();
+      _safeNotify();
     });
   }
 
@@ -104,12 +120,5 @@ class DeliveryViewModel extends ChangeNotifier {
     _distance = "${(dist / 1000).toStringAsFixed(1)} km";
     int minutes = ((dist / 1000) / 30 * 60).round(); // 30km/h estimate
     _eta = "$minutes mins";
-  }
-
-  @override
-  void dispose() {
-    _locationSubscription?.cancel();
-    _socketService.disconnect();
-    super.dispose();
   }
 }

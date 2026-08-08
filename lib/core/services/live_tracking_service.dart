@@ -1,8 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:geolocator/geolocator.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../constants/app_constants.dart';
+import 'socket_service.dart';
 import 'package:logger/logger.dart';
 
 class LiveTrackingService {
@@ -10,7 +9,7 @@ class LiveTrackingService {
   factory LiveTrackingService() => _instance;
   LiveTrackingService._internal();
 
-  io.Socket? _socket;
+  final SocketService _socketService = SocketService();
   StreamSubscription<Position>? _positionSubscription;
   final Logger _logger = Logger();
   String? _currentDonationId;
@@ -18,37 +17,18 @@ class LiveTrackingService {
 
   bool get isTracking => _positionSubscription != null;
 
-  Future<void> initSocket() async {
-    if (_socket != null && _socket!.connected) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(AppConstants.tokenKey);
-    final String socketUrl = AppConstants.baseUrl.replaceAll('/api/', '');
-
-    _socket = io.io(socketUrl, io.OptionBuilder()
-      .setTransports(['websocket'])
-      .setAuth({'token': token})
-      .disableAutoConnect()
-      .build());
-
-    _socket!.connect();
-
-    _socket!.onConnect((_) {
-      _logger.i('LiveTracking: Connected');
-      _flushQueue();
-    });
-    _socket!.onDisconnect((_) => _logger.w('LiveTracking: Disconnected'));
-    _socket!.onConnectError((err) => _logger.e('LiveTracking: Connect Error: $err'));
-  }
-
   void startTracking(String donationId) async {
     _currentDonationId = donationId;
-    await initSocket();
     
-    _socket!.emit('join_delivery', donationId);
+    if (!_socketService.isConnected) {
+      await _socketService.connect();
+    }
+    
+    _socketService.socket.emit('join_delivery', donationId);
 
-    _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
+    LocationSettings locationSettings;
+    if (Platform.isAndroid) {
+      locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 5,
         intervalDuration: const Duration(seconds: 3),
@@ -57,7 +37,23 @@ class LiveTrackingService {
           notificationTitle: "Delivery in Progress",
           enableWifiLock: true,
         ),
-      ),
+      );
+    } else if (Platform.isIOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      );
+    }
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
     ).listen((Position position) {
       _sendLocation(position);
     });
@@ -78,29 +74,39 @@ class LiveTrackingService {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    if (_socket == null || !_socket!.connected) {
+    if (!_socketService.isConnected) {
       _offlineQueue.add(data);
       if (_offlineQueue.length > 100) _offlineQueue.removeAt(0);
       return;
     }
 
-    _socket!.emit('update_location', data);
+    _flushQueue();
+    _socketService.socket.emit('update_location', data);
   }
 
   void _flushQueue() {
     if (_offlineQueue.isEmpty) return;
+    if (!_socketService.isConnected) return;
+
     for (var data in _offlineQueue) {
-      _socket!.emit('update_location', data);
+      _socketService.socket.emit('update_location', data);
     }
     _offlineQueue.clear();
   }
 
   void listenToLocation(String donationId, Function(Map<String, dynamic>) onUpdate) {
-    initSocket().then((_) {
-      _socket!.emit('join_delivery', donationId);
-      _socket!.on('location_update', (data) {
-        onUpdate(data);
-      });
+    if (!_socketService.isConnected) {
+      _socketService.connect().then((_) => _setupLocationListener(donationId, onUpdate));
+    } else {
+      _setupLocationListener(donationId, onUpdate);
+    }
+  }
+
+  void _setupLocationListener(String donationId, Function(Map<String, dynamic>) onUpdate) {
+    _socketService.socket.emit('join_delivery', donationId);
+    _socketService.socket.off('location_update');
+    _socketService.socket.on('location_update', (data) {
+      onUpdate(data);
     });
   }
 
@@ -108,7 +114,6 @@ class LiveTrackingService {
     _positionSubscription?.cancel();
     _positionSubscription = null;
     _currentDonationId = null;
-    _socket?.disconnect();
     _logger.i('LiveTracking: Stopped tracking');
   }
 }

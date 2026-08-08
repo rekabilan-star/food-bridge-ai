@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../data/repositories/donation_repository.dart';
-import 'package:geolocator/geolocator.dart';
+import '../../services/location_service.dart';
 
 class RouteOptimizationViewModel extends ChangeNotifier {
   final DonationRepository _donationRepository = DonationRepository();
+  bool _disposed = false;
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
   
   List<Map<String, dynamic>> _tasks = [];
   List<Map<String, dynamic>> get tasks => _tasks;
@@ -17,16 +28,16 @@ class RouteOptimizationViewModel extends ChangeNotifier {
   Future<void> fetchOptimizedRoute() async {
     _isLoading = true;
     _errorMessage = null;
-    notifyListeners();
+    _safeNotify();
 
     try {
-      Position position = await Geolocator.getCurrentPosition();
-      _tasks = await _donationRepository.getOptimizedRoute(position.latitude, position.longitude);
+      final loc = await LocationService().getProductionLocation();
+      _tasks = await _donationRepository.getOptimizedRoute(loc.latitude, loc.longitude);
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 }

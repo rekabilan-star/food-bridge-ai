@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/emergency_viewmodel.dart';
+import '../../viewmodels/notification_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import 'donate_food_screen.dart';
 import 'qr_display_screen.dart';
 import '../common/donation_tracking_screen.dart';
-import '../../../core/utils/intent_utils.dart';
+import '../common/donation_history_screen.dart';
+import '../common/profile_screen.dart';
+import '../common/widgets/stat_card.dart';
+import '../common/widgets/donation_card.dart';
+import '../common/widgets/donor_badges_card.dart';
+import '../common/widgets/user_profile_modal.dart';
+import '../common/widgets/floating_bottom_nav.dart';
+import '../common/widgets/shimmer_loading.dart';
+import '../chat/chat_list_screen.dart';
+
+import 'dart:async';
 
 class DonorDashboardScreen extends StatefulWidget {
   const DonorDashboardScreen({super.key});
@@ -17,131 +29,404 @@ class DonorDashboardScreen extends StatefulWidget {
 }
 
 class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
+  int _currentNavIndex = 0;
+  Timer? _autoRefreshTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DonationViewModel>().fetchDonorDonations();
-      context.read<EmergencyViewModel>().fetchActiveRequests();
+      _refreshData();
+      _autoRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+        if (mounted) _refreshData();
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshData() async {
+    context.read<DonationViewModel>().fetchDonorDonations();
+    context.read<EmergencyViewModel>().fetchActiveRequests();
+    context.read<NotificationViewModel>().initSocketListeners();
+    context.read<NotificationViewModel>().fetchNotifications(refresh: true);
   }
 
   @override
   Widget build(BuildContext context) {
     final donationViewModel = context.watch<DonationViewModel>();
     final emergencyViewModel = context.watch<EmergencyViewModel>();
-    final user = context.watch<AuthViewModel>().user;
+    final userVM = context.watch<AuthViewModel>();
+    final user = userVM.user;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Donor Dashboard"),
-        actions: [
-          IconButton(
-            onPressed: () {
-              context.read<AuthViewModel>().logout();
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-            },
-            icon: const Icon(Icons.logout),
+      backgroundColor: AppColors.backgroundLight,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: IndexedStack(
+              index: _currentNavIndex,
+              children: [
+                // TAB 0: Clean Essential Donor Dashboard
+                RefreshIndicator(
+                  onRefresh: _refreshData,
+                  color: AppColors.primary,
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      // 1. Clean App Bar
+                      _buildCleanAppBar(context, user?.name ?? "Donor"),
+
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 2. Primary Action Hero Banner (+ Donate Food)
+                              _buildPrimaryDonateHero(context).animate().fadeIn(duration: 400.ms),
+
+                              const SizedBox(height: 20),
+
+                              // 3. Core Impact Statistics Row (3 StatCards, overflow-free)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: StatCard(
+                                      value: "${donationViewModel.donations.length}",
+                                      label: "Donations",
+                                      icon: Icons.card_giftcard_rounded,
+                                      iconColor: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Expanded(
+                                    child: StatCard(
+                                      value: "128+",
+                                      label: "Meals Shared",
+                                      icon: Icons.restaurant_rounded,
+                                      iconColor: AppColors.secondary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: StatCard(
+                                      value: "4.9",
+                                      label: "Impact Score",
+                                      icon: Icons.star_rounded,
+                                      iconColor: Colors.amber.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+
+                              // 4. Donor Achievement Badges
+                              const DonorBadgesCard(totalMeals: 85).animate().fadeIn(delay: 200.ms),
+
+                              const SizedBox(height: 24),
+
+                              // 4. Urgent Emergency Rescue Requests (if active)
+                              if (emergencyViewModel.requests.isNotEmpty) ...[
+                                _buildEmergencySection(emergencyViewModel),
+                                const SizedBox(height: 24),
+                              ],
+
+                              // 5. Recent Active Donations Feed
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    "Active Donations",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textPrimary,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const DonationHistoryScreen()),
+                                      );
+                                    },
+                                    child: const Text(
+                                      "View All",
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Donations List with progress steppers
+                              donationViewModel.isLoading && donationViewModel.donations.isEmpty
+                                  ? const ShimmerListLoading(count: 3)
+                                  : donationViewModel.donations.isEmpty
+                                      ? _buildEmptyState()
+                                      : _buildDonationsList(donationViewModel.donations),
+
+                              const SizedBox(height: 100),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // TAB 1: History
+                const DonationHistoryScreen(),
+
+                // TAB 2: Chat
+                const ChatListScreen(),
+
+                // TAB 3: Profile
+                const ProfileScreen(),
+              ],
+            ),
+          ),
+
+          // Floating Bottom Navigation Bar
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: FloatingBottomNav(
+              currentIndex: _currentNavIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentNavIndex = index;
+                });
+              },
+              onAddTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DonateFoodScreen()),
+                );
+              },
+            ),
           ),
         ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await donationViewModel.fetchDonorDonations();
-          await emergencyViewModel.fetchActiveRequests();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(user?.name ?? "Donor"),
-              const SizedBox(height: 32),
-              _buildEmergencyRequests(emergencyViewModel),
-              const SizedBox(height: 32),
-              _buildActionCard(context),
-              const SizedBox(height: 32),
-              Text(
-                "Your Active Donations",
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              donationViewModel.isLoading && donationViewModel.donations.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : donationViewModel.donations.isEmpty
-                      ? _buildEmptyState()
-                      : _buildDonationList(donationViewModel.donations),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildEmergencyRequests(EmergencyViewModel viewModel) {
-    if (viewModel.requests.isEmpty) return const SizedBox.shrink();
+  Widget _buildCleanAppBar(BuildContext context, String userName) {
+    final nVM = context.watch<NotificationViewModel>();
 
+    return SliverAppBar(
+      floating: true,
+      pinned: true,
+      elevation: 0,
+      surfaceTintColor: Colors.white,
+      backgroundColor: Colors.white,
+      title: const Text(
+        "FoodBridge AI",
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 20,
+          letterSpacing: -0.5,
+          color: AppColors.primary,
+        ),
+      ),
+      actions: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded, size: 24, color: AppColors.textPrimary),
+              onPressed: () => Navigator.pushNamed(context, '/notifications'),
+            ),
+            if (nVM.unreadCount > 0)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          icon: const Icon(Icons.logout_rounded, size: 22, color: AppColors.textPrimary),
+          onPressed: () {
+            context.read<AuthViewModel>().logout();
+            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+          },
+          tooltip: "Logout",
+        ),
+        GestureDetector(
+          onTap: () => UserProfileModal.show(context),
+          child: CircleAvatar(
+            radius: 16,
+            backgroundColor: AppColors.primary,
+            child: Text(
+              userName.isNotEmpty ? userName[0].toUpperCase() : "D",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+      ],
+    );
+  }
+
+  Widget _buildPrimaryDonateHero(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primary, Color(0xFF7E22CE)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.2),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Share Surplus Food",
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Instant dispatch to verified NGO rescue drivers nearby.",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DonateFoodScreen()));
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text("DONATE FOOD NOW", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Icon(Icons.volunteer_activism_rounded, size: 60, color: Colors.white24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmergencySection(EmergencyViewModel viewModel) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        const Row(
           children: [
-            const Icon(Icons.campaign, color: Colors.red),
-            const SizedBox(width: 8),
-            Text("Emergency Requests", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.red)),
+            Icon(Icons.flash_on_rounded, color: AppColors.warning, size: 18),
+            SizedBox(width: 6),
+            Text(
+              "URGENT RESCUE ALERTS",
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                color: AppColors.warning,
+                letterSpacing: 0.8,
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         SizedBox(
-          height: 160,
+          height: 135,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: viewModel.requests.length,
             itemBuilder: (context, index) {
               final request = viewModel.requests[index];
               return Container(
-                width: 280,
-                margin: const EdgeInsets.only(right: 16),
-                child: Card(
-                  color: Colors.red[50],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.red.withValues(alpha: 0.2))),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                width: 270,
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.4), width: 1.2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(child: Text(request.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(4)),
-                              child: Text(request.priority, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
+                        Expanded(
+                          child: Text(
+                            request.title,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(request.reason, style: TextStyle(color: Colors.grey[700], fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-                        const Spacer(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("Need: ${request.requiredMembers} members", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            ElevatedButton(
-                              onPressed: () {},
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(60, 30)),
-                              child: const Text("HELP", style: TextStyle(fontSize: 12)),
-                            ),
-                          ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            request.priority,
+                            style: const TextStyle(color: AppColors.warning, fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      request.reason,
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(80, 32),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text("HELP NOW", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
@@ -151,119 +436,25 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     );
   }
 
-  Widget _buildHeader(String name) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 30,
-          backgroundColor: AppColors.primary,
-          child: Text(name[0],
-              style: const TextStyle(
-                  fontSize: 24,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Hello,", style: TextStyle(color: Colors.grey[600])),
-            Text(name,
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCard(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.volunteer_activism, color: Colors.white, size: 40),
-          const SizedBox(height: 16),
-          const Text(
-            "Share Your Surplus Food",
-            style: TextStyle(
-                color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "Connect with nearby NGOs to serve those in need.",
-            style: TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const DonateFoodScreen())),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primary,
-              minimumSize: const Size(160, 50),
-            ),
-            child: const Text("DONATE NOW"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDonationList(List donations) {
+  Widget _buildDonationsList(List donations) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: donations.length,
+      itemCount: donations.length > 5 ? 5 : donations.length,
       itemBuilder: (context, index) {
         final donation = donations[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                donation.imageUrl,
-                width: 60,
-                height: 60,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[200], child: const Icon(Icons.fastfood)),
-              ),
-            ),
-            title: Text(donation.foodName,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text("Serves ${donation.membersServed} Members"),
-            trailing: _buildStatusChip(donation.status),
-            onTap: () {
-                if (donation.status == 'waiting') {
-                    // Show details
-                } else if (donation.status == 'completed') {
-                    // Show summary
-                } else {
-                    // Track or show QR
-                    _showOptions(context, donation);
-                }
-            },
-          ),
+        final status = donation.status == 'waiting' ? 'Pending' : (donation.status == 'picked_up' ? 'Picked Up' : donation.status);
+        return DonationCard(
+          title: donation.foodName,
+          subtitle: "${donation.membersServed} Served • ${donation.checklist.foodType.isNotEmpty ? donation.checklist.foodType : (donation.category.isNotEmpty ? donation.category : 'Cooked Meal')}",
+          status: status,
+          timeAgo: "Recently",
+          etaText: status == 'Pending' ? '14 mins' : '8 mins',
+          distanceText: '2.4 km away',
+          onTrackTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
+          },
+          onTap: () => _showOptions(context, donation),
         );
       },
     );
@@ -272,123 +463,134 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
   void _showOptions(BuildContext context, dynamic donation) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Donation Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: const Icon(Icons.map, color: Colors.blue),
-              title: const Text("Track NGO Partner"),
-              onTap: () {
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              "Donation Details",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 18),
+            if (donation.status == 'waiting') ...[
+              _buildModalTile(context, "Edit Details", Icons.edit_outlined, AppColors.primary, () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => DonateFoodScreen(donation: donation)));
+              }),
+              const SizedBox(height: 10),
+              _buildModalTile(context, "Cancel Listing", Icons.delete_outline_rounded, AppColors.error, () {
+                Navigator.pop(context);
+                _showDeleteConfirmDialog(context, donation);
+              }),
+            ],
+            if (donation.status != 'waiting')
+              _buildModalTile(context, "Track Live Map", Icons.map_outlined, AppColors.primary, () {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
-              },
-            ),
-            if (donation.assignedNgoPhone != null) ...[
-              ListTile(
-                leading: const Icon(Icons.phone, color: Colors.green),
-                title: const Text("Call NGO Partner"),
-                onTap: () {
-                  Navigator.pop(context);
-                  IntentUtils.makePhoneCall(donation.assignedNgoPhone);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.message, color: Colors.orange),
-                title: const Text("WhatsApp NGO Partner"),
-                onTap: () {
-                  Navigator.pop(context);
-                  IntentUtils.sendWhatsAppMessage(donation.assignedNgoPhone, "Hello, regarding my donation: ${donation.foodName}");
-                },
-              ),
-            ],
-            ListTile(
-              leading: const Icon(Icons.qr_code, color: Colors.orange),
-              title: const Text("Show Pickup QR"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => QrDisplayScreen(donation: donation)));
-              },
-            ),
-            if (donation.status == 'waiting')
-              ListTile(
-                leading: const Icon(Icons.cancel_outlined, color: Colors.red),
-                title: const Text("Cancel Donation", style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showCancelDialog(context, donation);
-                },
-              ),
+              }),
+            const SizedBox(height: 10),
+            _buildModalTile(context, "Handover QR Code", Icons.qr_code_2_rounded, AppColors.warning, () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => QrDisplayScreen(donation: donation)));
+            }),
+            const SizedBox(height: 18),
           ],
         ),
       ),
     );
   }
 
-  void _showCancelDialog(BuildContext context, dynamic donation) {
-    final controller = TextEditingController();
+  Widget _buildModalTile(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 12),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                const Spacer(),
+                Icon(Icons.arrow_forward_ios_rounded, size: 14, color: color.withValues(alpha: 0.5)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(BuildContext context, dynamic donation) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Cancel Donation?"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: "Reason for cancellation"),
-        ),
+        content: const Text("This action will remove your donation listing."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEEP IT")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEEP")),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.isEmpty) return;
-              final success = await context.read<DonationViewModel>().cancelDonation(donation.id, controller.text);
+              final success = await context.read<DonationViewModel>().deleteDonation(donation.id);
               if (success) {
                 if (context.mounted) Navigator.pop(context);
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("CANCEL DONATION"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(90, 40),
+            ),
+            child: const Text("CANCEL LISTING"),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusChip(String status) {
-    Color color;
-    switch (status) {
-      case 'waiting': color = Colors.orange; break;
-      case 'accepted': color = Colors.blue; break;
-      case 'on_the_way': color = Colors.blue; break;
-      case 'arrived': color = Colors.orange; break;
-      case 'picked_up': color = Colors.purple; break;
-      case 'completed': color = Colors.green; break;
-      default: color = Colors.grey;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status.toUpperCase().replaceAll('_', ' '),
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
   Widget _buildEmptyState() {
-    return Center(
+    return Container(
+      padding: const EdgeInsets.all(28),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border, width: 1.2),
+      ),
       child: Column(
         children: [
-          const SizedBox(height: 40),
-          Icon(Icons.no_food, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text("No donations yet", style: TextStyle(color: Colors.grey[600])),
+          Icon(Icons.volunteer_activism_rounded, size: 44, color: AppColors.primary.withValues(alpha: 0.5)),
+          const SizedBox(height: 10),
+          const Text(
+            "No Active Donations",
+            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Tap 'DONATE FOOD NOW' above to share food",
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
         ],
       ),
     );

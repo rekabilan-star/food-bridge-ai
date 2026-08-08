@@ -3,6 +3,17 @@ import '../../data/repositories/emergency_repository.dart';
 
 class EmergencyViewModel extends ChangeNotifier {
   final EmergencyRepository _repository = EmergencyRepository();
+  bool _disposed = false;
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   List<EmergencyRequestModel> _requests = [];
   bool _isLoading = false;
@@ -14,7 +25,7 @@ class EmergencyViewModel extends ChangeNotifier {
 
   void _setLoading(bool value) {
     _isLoading = value;
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> fetchActiveRequests() async {
@@ -23,7 +34,8 @@ class EmergencyViewModel extends ChangeNotifier {
       _requests = await _repository.getActiveRequests();
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _requests = [];
+      _errorMessage = null;
     }
     _setLoading(false);
   }

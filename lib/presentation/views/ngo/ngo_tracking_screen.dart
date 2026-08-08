@@ -43,12 +43,16 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
 
   Future<void> _initLocationTracking() async {
     const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
+      accuracy: LocationAccuracy.best,
       distanceFilter: 10,
     );
 
+    debugPrint('[GPS] Starting NGO tracking stream');
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position position) {
-      context.read<DonationViewModel>().updateNgoLocation(position.latitude, position.longitude);
+      debugPrint('[GPS] NGO Position update: Lat ${position.latitude}, Lng ${position.longitude}, Acc ${position.accuracy}m');
+      if (mounted) {
+        context.read<DonationViewModel>().updateNgoLocation(position.latitude, position.longitude);
+      }
     });
   }
 
@@ -150,7 +154,8 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
             else if (donation.status == 'arrived')
               _buildPrimaryButton("SCAN PICKUP QR", Icons.qr_code_scanner, AppColors.ngoColor, () async {
                 final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => QrScannerScreen(donationId: donation.id)));
-                if (result == true && mounted) {
+                if (!mounted) return;
+                if (result == true) {
                    UIUtils.showSuccessDialog(context, "Pickup Verified Successfully!");
                 }
               })

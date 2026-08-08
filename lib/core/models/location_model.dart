@@ -1,6 +1,7 @@
 class LocationModel {
   final double latitude;
   final double longitude;
+  final double accuracy; // Added accuracy field
   final String fullAddress;
   final String? street;
   final String? locality;
@@ -15,6 +16,7 @@ class LocationModel {
   LocationModel({
     required this.latitude,
     required this.longitude,
+    required this.accuracy,
     required this.fullAddress,
     this.street,
     this.locality,
@@ -31,6 +33,7 @@ class LocationModel {
     return {
       'latitude': latitude,
       'longitude': longitude,
+      'accuracy': accuracy,
       'fullAddress': fullAddress,
       'street': street,
       'locality': locality,
@@ -46,9 +49,10 @@ class LocationModel {
 
   factory LocationModel.fromJson(Map<String, dynamic> json) {
     return LocationModel(
-      latitude: json['latitude'],
-      longitude: json['longitude'],
-      fullAddress: json['fullAddress'],
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      accuracy: (json['accuracy'] as num? ?? 0.0).toDouble(),
+      fullAddress: json['fullAddress'] ?? '',
       street: json['street'],
       locality: json['locality'],
       subLocality: json['subLocality'],
@@ -57,7 +61,9 @@ class LocationModel {
       state: json['state'],
       postalCode: json['postalCode'],
       country: json['country'],
-      timestamp: DateTime.parse(json['timestamp']),
+      timestamp: json['timestamp'] != null 
+          ? DateTime.parse(json['timestamp']) 
+          : DateTime.now(),
     );
   }
 }

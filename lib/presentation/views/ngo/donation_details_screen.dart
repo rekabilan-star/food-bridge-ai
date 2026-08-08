@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/donation_model.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../core/utils/intent_utils.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../data/models/user_model.dart';
 
 class DonationDetailsScreen extends StatelessWidget {
   final DonationModel donation;
@@ -43,8 +45,10 @@ class DonationDetailsScreen extends StatelessWidget {
                     style: const TextStyle(color: Colors.grey, fontSize: 14),
                   ),
                   const SizedBox(height: 48),
-                  Consumer<DonationViewModel>(
-                    builder: (context, viewModel, _) {
+                  Consumer2<AuthViewModel, DonationViewModel>(
+                    builder: (context, auth, viewModel, _) {
+                      if (auth.user?.role != UserRole.ngo) return const SizedBox.shrink();
+
                       return ElevatedButton(
                         onPressed: viewModel.isLoading ? null : () => _confirmAcceptance(context, viewModel),
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),

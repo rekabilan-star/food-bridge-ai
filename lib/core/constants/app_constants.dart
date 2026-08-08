@@ -2,7 +2,7 @@ class AppConstants {
   static const String appName = "FoodRescue AI";
   
   // API Base URL (For Android Emulator: 10.0.2.2, For Physical Device: Use LAN IP)
-  static const String baseUrl = "http://10.0.2.2:5000/api/";
+  static const String baseUrl = "https://food-bridge-ai.onrender.com/api/";
 
   // Endpoints
   static const String loginUrl = "auth/login";

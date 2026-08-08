@@ -10,6 +10,7 @@ class UserModel {
   final double? latitude;
   final double? longitude;
   final String? profileImage;
+  final DateTime? lastLogin;
   
   // NGO Specific Fields
   final String? ngoRegistrationNumber;
@@ -32,6 +33,7 @@ class UserModel {
     this.latitude,
     this.longitude,
     this.profileImage,
+    this.lastLogin,
     this.ngoRegistrationNumber,
     this.ngoCertificateUrl,
     this.ngoIdProofUrl,
@@ -43,15 +45,19 @@ class UserModel {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['_id'] ?? json['id'],
-      email: json['email'],
-      name: json['name'],
-      role: UserRole.values.firstWhere((e) => e.toString().split('.').last == json['role']),
-      phoneNumber: json['phoneNumber'],
+      id: json['_id'] ?? json['id'] ?? '',
+      email: json['email'] ?? '',
+      name: json['name'] ?? 'Unknown User',
+      role: UserRole.values.firstWhere(
+        (e) => e.toString().split('.').last == json['role'],
+        orElse: () => UserRole.donor,
+      ),
+      phoneNumber: json['phoneNumber'] ?? '',
       address: json['address'],
       latitude: json['latitude']?.toDouble(),
       longitude: json['longitude']?.toDouble(),
       profileImage: json['profileImage'],
+      lastLogin: json['lastLogin'] != null ? DateTime.parse(json['lastLogin']) : null,
       ngoRegistrationNumber: json['ngoRegistrationNumber'],
       ngoCertificateUrl: json['ngoCertificateUrl'],
       ngoIdProofUrl: json['ngoIdProofUrl'],
@@ -73,6 +79,7 @@ class UserModel {
       'latitude': latitude,
       'longitude': longitude,
       'profileImage': profileImage,
+      'lastLogin': lastLogin?.toIso8601String(),
       'ngoRegistrationNumber': ngoRegistrationNumber,
       'ngoCertificateUrl': ngoCertificateUrl,
       'ngoIdProofUrl': ngoIdProofUrl,

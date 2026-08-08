@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 class UIUtils {
   static void showErrorDialog(BuildContext context, String message) {
@@ -56,6 +57,18 @@ class UIUtils {
       barrierDismissible: false,
       builder: (ctx) => const Center(
         child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  static void showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }

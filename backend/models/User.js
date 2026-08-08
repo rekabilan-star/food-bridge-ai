@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -34,7 +35,39 @@ const UserSchema = new mongoose.Schema({
   address: String,
   latitude: Number,
   longitude: Number,
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],
+    },
+  },
   profileImage: String,
+
+  // Security Features
+  isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  loginAttempts: {
+    type: Number,
+    default: 0,
+  },
+  lockUntil: {
+    type: Date,
+  },
+  lastLogin: {
+    type: Date,
+  },
+  loginHistory: [{
+    timestamp: { type: Date, default: Date.now },
+    ip: String,
+    deviceInfo: String,
+    os: String
+  }],
 
   // Real-time location for NGO/Volunteer tracking
   currentLatitude: Number,
@@ -69,15 +102,29 @@ const UserSchema = new mongoose.Schema({
     default: 'pending',
   },
   refreshToken: String,
+  resetPasswordToken: String,
+  resetPasswordExpire: Date,
+
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
+UserSchema.index({ location: '2dsphere' });
+
 UserSchema.pre('save', async function (next) {
+  if (this.isModified('latitude') || this.isModified('longitude')) {
+    if (this.latitude && this.longitude) {
+      this.location = {
+        type: 'Point',
+        coordinates: [this.longitude, this.latitude],
+      };
+    }
+  }
+
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
@@ -99,6 +146,23 @@ UserSchema.methods.getRefreshToken = function () {
 
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Generate and hash password token
+UserSchema.methods.getResetPasswordToken = function () {
+  // Generate token
+  const resetToken = crypto.randomBytes(20).toString('hex');
+
+  // Hash token and set to resetPasswordToken field
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Set expire
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
 };
 
 module.exports = mongoose.model('User', UserSchema);

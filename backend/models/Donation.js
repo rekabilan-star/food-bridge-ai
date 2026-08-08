@@ -34,7 +34,7 @@ const DonationSchema = new mongoose.Schema({
   checklist: {
     isFreshlyPrepared: { type: Boolean, default: false },
     isProperlyPacked: { type: Boolean, default: false },
-    foodType: { type: String, enum: ['Veg', 'Non-Veg', 'Both'], default: 'Veg' },
+    foodType: { type: String, default: 'Cooked Meal' },
     hasAllergens: { type: Boolean, default: false },
   },
 
@@ -62,6 +62,16 @@ const DonationSchema = new mongoose.Schema({
   longitude: {
     type: Number,
     required: true,
+  },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],
+    },
   },
   specialInstructions: String,
   status: {
@@ -116,27 +126,44 @@ const DonationSchema = new mongoose.Schema({
     completedAt: Date,
   },
 
+  expiryNotified: {
+    type: Boolean,
+    default: false
+  },
+
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
+DonationSchema.index({ donorId: 1, createdAt: -1 });
+DonationSchema.index({ status: 1 });
+DonationSchema.index({ assignedNgoId: 1 });
+DonationSchema.index({ location: '2dsphere' });
+
 DonationSchema.pre('save', function (next) {
+  if (this.isModified('latitude') || this.isModified('longitude')) {
+    this.location = {
+      type: 'Point',
+      coordinates: [this.longitude, this.latitude],
+    };
+  }
   if (this.isNew) {
     this.timeline.push({
       status: 'waiting',
       description: 'Donation submitted and waiting for NGO acceptance.',
     });
     this.qrCode = `QR-${this._id}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Summary fields update if items exist
-    if (this.items && this.items.length > 0) {
-      this.foodName = this.items[0].foodName + (this.items.length > 1 ? ` +${this.items.length - 1} more` : '');
-      this.category = this.items[0].category;
-      this.membersServed = this.items.reduce((sum, item) => sum + item.membersServed, 0);
-    }
   }
+
+  // Summary fields update if items exist and are modified
+  if (this.items && this.items.length > 0) {
+    this.foodName = this.items[0].foodName + (this.items.length > 1 ? ` +${this.items.length - 1} more` : '');
+    this.category = this.items[0].category;
+    this.membersServed = this.items.reduce((sum, item) => sum + item.membersServed, 0);
+  }
+
   next();
 });
 

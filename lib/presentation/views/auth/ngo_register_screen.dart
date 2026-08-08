@@ -1,11 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/location_provider_v2.dart';
-import '../../../core/utils/location_loading_dialog.dart';
 import '../../../core/utils/manual_location_picker.dart';
 import '../../../core/utils/ui_utils.dart';
+import '../../../core/errors/location_exception.dart';
+import '../../../core/utils/validators.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/custom_app_bar.dart';
 
 class NgoRegisterScreen extends StatefulWidget {
   const NgoRegisterScreen({super.key});
@@ -22,13 +30,42 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _regNumberController = TextEditingController();
-  
-  // URL placeholders for demo. In real app, use image_picker and upload to Cloudinary.
-  final String _demoCertUrl = "https://cloudinary.com/demo/cert.pdf";
-  final String _demoIdUrl = "https://cloudinary.com/demo/id.jpg";
+
+  String _selectedIdType = 'Aadhaar Card';
+
+  File? _idFile;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+        locProvider.fetchLocation().then((_) {
+          _onLocationDetected();
+        });
+        locProvider.addListener(_onLocationDetected);
+      }
+    });
+  }
+
+  void _onLocationDetected() {
+    if (!mounted) return;
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    if (locProvider.location != null && !locProvider.isLoading) {
+      if (locProvider.location!.fullAddress.isNotEmpty && _addressController.text.isEmpty) {
+        setState(() {
+          _addressController.text = locProvider.location!.fullAddress;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
+    try {
+      Provider.of<LocationProviderV2>(context, listen: false).removeListener(_onLocationDetected);
+    } catch (_) {}
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -38,21 +75,80 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
     super.dispose();
   }
 
+  Future<void> _pickFile(bool isCert) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile != null) {
+      setState(() {
+        _idFile = File(pickedFile.path);
+      });
+    }
+  }
+
   void _startLocationCapture() async {
-    final locationProvider = context.read<LocationProviderV2>();
-    locationProvider.fetchLocation();
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    await locProvider.fetchLocation();
+    if (mounted && locProvider.location != null) {
+      setState(() {
+        _addressController.text = locProvider.location!.fullAddress;
+      });
+    } else if (locProvider.error != null) {
+      _handleLocationError(locProvider.error!);
+    }
+  }
+
+  void _handleLocationError(LocationException error) {
     if (!mounted) return;
-    LocationLoadingDialog.show(context);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Location Data Required"),
+        content: Text(error.message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+          if (error.type == LocationErrorType.permissionDeniedForever || error.type == LocationErrorType.serviceDisabled)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                if (error.type == LocationErrorType.serviceDisabled) {
+                  Geolocator.openLocationSettings();
+                } else {
+                  Geolocator.openAppSettings();
+                }
+              },
+              child: const Text("OPEN SETTINGS"),
+            )
+          else
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _pickManualLocation();
+              },
+              child: const Text("PICK MANUALLY"),
+            ),
+        ],
+      ),
+    );
   }
 
   void _pickManualLocation() async {
+    final locProvider = context.read<LocationProviderV2>();
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ManualLocationPicker()),
+      MaterialPageRoute(
+        builder: (_) => ManualLocationPicker(
+          initialLat: locProvider.location?.latitude,
+          initialLng: locProvider.location?.longitude,
+        ),
+      ),
     );
-    if (result != null) {
-      context.read<LocationProviderV2>().setManualLocation(result);
-      _addressController.text = result.fullAddress;
+    if (result != null && mounted) {
+      locProvider.setManualLocation(result);
+      setState(() {
+        _addressController.text = result.fullAddress;
+      });
     }
   }
 
@@ -61,129 +157,193 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
       final location = context.read<LocationProviderV2>().location;
       
       if (location == null) {
-        UIUtils.showErrorDialog(context, "GPS Location Required. Please tap the location button.");
+        UIUtils.showErrorDialog(context, "Verification Failed: Organization headquarters location is required.");
         return;
       }
 
-      final success = await context.read<AuthViewModel>().registerNgo(
-        name: _nameController.text,
-        email: _emailController.text,
+      if (_idFile == null) {
+        UIUtils.showErrorDialog(context, "Personal ID Document Required: Please upload your $_selectedIdType proof document.");
+        return;
+      }
+
+      final authVM = context.read<AuthViewModel>();
+      
+      final success = await authVM.registerNgo(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
         password: _passwordController.text,
-        phoneNumber: _phoneController.text,
-        address: _addressController.text.isEmpty ? location.fullAddress : _addressController.text,
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.isEmpty ? location.fullAddress : _addressController.text.trim(),
         latitude: location.latitude,
         longitude: location.longitude,
-        regNumber: _regNumberController.text,
-        certificateUrl: _demoCertUrl,
-        idProofUrl: _demoIdUrl,
+        regNumber: _selectedIdType,
+        certificateUrl: _idFile!.path,
+        idProofUrl: _idFile!.path,
       );
 
+      if (!mounted) return;
+
       if (success) {
-        if (!mounted) return;
         UIUtils.showSuccessDialog(
           context, 
-          "Registration Submitted! Admin will verify your NGO.",
-          onOk: () => Navigator.pop(context)
+          "Application Submitted! Our team will review your NGO documentation shortly.",
+          onOk: () => Navigator.pop(context),
         );
       } else {
-        if (!mounted) return;
-        UIUtils.showErrorDialog(
-          context, 
-          context.read<AuthViewModel>().errorMessage ?? "Registration Failed"
-        );
+        UIUtils.showErrorDialog(context, authVM.errorMessage ?? "Registration Error");
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authViewModel = context.watch<AuthViewModel>();
+    final authVM = context.watch<AuthViewModel>();
     final locationProvider = context.watch<LocationProviderV2>();
 
-    if (locationProvider.location != null && _addressController.text.isEmpty) {
-      _addressController.text = locationProvider.location!.fullAddress;
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text("NGO Partner Registration")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(
+        title: "NGO Partner Application",
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "NGO Details",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.ngoColor),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: "NGO Name", prefixIcon: Icon(Icons.business)),
-                validator: (value) => value!.isEmpty ? "Enter NGO name" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _regNumberController,
-                decoration: const InputDecoration(labelText: "Registration Number", prefixIcon: Icon(Icons.assignment_outlined)),
-                validator: (value) => value!.isEmpty ? "Enter registration number" : null,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildFileUploadTile("Government Certificate", Icons.upload_file),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildFileUploadTile("Identity Proof", Icons.badge_outlined),
-                  ),
-                ],
-              ),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: AppColors.border, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.35),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.handshake_rounded, size: 32, color: AppColors.primary),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Partner with FoodBridge AI",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    _buildSectionHeader("ORGANIZATION DETAILS"),
+                    ModernTextField(
+                      controller: _nameController,
+                      label: "Official NGO Name",
+                      prefixIcon: Icons.business_rounded,
+                      validator: Validators.validateName,
+                    ),
+                    const SizedBox(height: 14),
+                    
+                    _buildSectionHeader("PERSONAL IDENTITY VERIFICATION"),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedIdType,
+                      decoration: InputDecoration(
+                        labelText: "Personal ID Document Type",
+                        prefixIcon: const Icon(Icons.badge_rounded, color: AppColors.primary),
+                        filled: true,
+                        fillColor: AppColors.backgroundLight,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'Aadhaar Card', child: Text("Aadhaar Card")),
+                        DropdownMenuItem(value: 'Driving License', child: Text("Driving License")),
+                        DropdownMenuItem(value: 'Ration Card', child: Text("Ration Card")),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _selectedIdType = val;
+                          });
+                        }
+                      },
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    InkWell(
+                      onTap: () => _pickFile(false),
+                      borderRadius: BorderRadius.circular(18),
+                      child: _buildDocTile(
+                        _idFile == null ? "Upload $_selectedIdType Proof" : "$_selectedIdType Uploaded ✓", 
+                        Icons.upload_file_rounded, 
+                        _idFile != null,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    _buildSectionHeader("ACCOUNT"),
+                    ModernTextField(
+                      controller: _emailController,
+                      label: "Work Email",
+                      prefixIcon: Icons.alternate_email_rounded,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: Validators.validateEmail,
+                    ),
+                    const SizedBox(height: 14),
+                    ModernTextField(
+                      controller: _passwordController,
+                      label: "Password",
+                      prefixIcon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                      validator: Validators.validatePassword,
+                    ),
+                    const SizedBox(height: 14),
+                    ModernTextField(
+                      controller: _phoneController,
+                      label: "Contact Phone",
+                      prefixIcon: Icons.phone_android_rounded,
+                      keyboardType: TextInputType.phone,
+                      validator: Validators.validatePhone,
+                    ),
+                    const SizedBox(height: 14),
+                    ModernTextField(
+                      controller: _addressController,
+                      label: "HQ Address",
+                      prefixIcon: Icons.location_on_outlined,
+                      maxLines: 2,
+                      validator: (v) => Validators.validateRequired(v, "Address"),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    _buildLocationBox(locationProvider),
+
+                    const SizedBox(height: 32),
+
+                    PrimaryButton(
+                      text: "SUBMIT APPLICATION",
+                      isLoading: authVM.isLoading,
+                      onPressed: _register,
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0),
+
               const SizedBox(height: 32),
-              Text(
-                "Contact Information",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.ngoColor),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: "Official Email", prefixIcon: Icon(Icons.email_outlined)),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) => value!.isEmpty ? "Enter email" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: "Password", prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-                validator: (value) => value!.length < 6 ? "Minimum 6 characters" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: "Phone Number", prefixIcon: Icon(Icons.phone_outlined)),
-                keyboardType: TextInputType.phone,
-                validator: (value) => value!.isEmpty ? "Enter phone" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: "Headquarters Address", prefixIcon: Icon(Icons.location_on_outlined)),
-                maxLines: 2,
-                validator: (value) => value!.isEmpty ? "Enter address" : null,
-              ),
-              const SizedBox(height: 16),
-              _buildLocationSection(locationProvider),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: authViewModel.isLoading || locationProvider.isLoading ? null : _register,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),
-                child: authViewModel.isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("SUBMIT REGISTRATION"),
-              ),
             ],
           ),
         ),
@@ -191,73 +351,96 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
     );
   }
 
-  Widget _buildFileUploadTile(String label, IconData icon) {
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, left: 2),
+      child: Text(
+        title,
+        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 1.2),
+      ),
+    );
+  }
+
+  Widget _buildDocTile(String label, IconData icon, bool isUploaded) {
     return Container(
-      height: 100,
+      height: 80,
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        color: isUploaded ? AppColors.success.withValues(alpha: 0.08) : AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: isUploaded ? AppColors.success : AppColors.border, width: 1.5),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: AppColors.ngoColor),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center),
+          Icon(icon, color: isUploaded ? AppColors.success : AppColors.primary, size: 22),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: isUploaded ? AppColors.success : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLocationSection(LocationProviderV2 provider) {
+  Widget _buildLocationBox(LocationProviderV2 provider) {
     final hasLocation = provider.location != null;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: hasLocation ? Colors.green : Colors.transparent),
+        color: hasLocation ? AppColors.success.withValues(alpha: 0.06) : AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: hasLocation ? AppColors.success.withValues(alpha: 0.3) : AppColors.border, width: 1.5),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(hasLocation ? Icons.check_circle : Icons.gps_fixed, color: hasLocation ? Colors.green : AppColors.ngoColor),
+              Icon(hasLocation ? Icons.check_circle_rounded : Icons.gps_fixed_rounded, color: hasLocation ? AppColors.success : AppColors.primary, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      hasLocation ? "Location Verified" : "GPS Location Required",
-                      style: TextStyle(color: hasLocation ? Colors.green[700] : Colors.grey[600], fontWeight: FontWeight.bold),
+                      hasLocation ? "Location Verified" : "HQ GPS Identity", 
+                      style: TextStyle(fontWeight: FontWeight.w700, color: hasLocation ? AppColors.success : AppColors.textPrimary, fontSize: 14),
                     ),
-                    if (hasLocation)
-                      Text(
-                        "${provider.location!.latitude.toStringAsFixed(4)}, ${provider.location!.longitude.toStringAsFixed(4)}",
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
+                    Text(
+                      hasLocation ? "Organization HQ locked" : "Precise location required", 
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
                   ],
                 ),
               ),
-              TextButton(onPressed: _startLocationCapture, child: Text(hasLocation ? "RE-SCAN" : "GET", style: const TextStyle(color: AppColors.ngoColor))),
+              TextButton(
+                onPressed: _startLocationCapture, 
+                child: Text(hasLocation ? "REFRESH" : "VERIFY", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.primary)),
+              ),
             ],
           ),
-          if (!hasLocation) ...[
-            const Divider(),
-            InkWell(
-              onTap: _pickManualLocation,
-              child: const Row(
+          const Divider(height: 20, color: AppColors.border),
+          InkWell(
+            onTap: _pickManualLocation,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.map, size: 16, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text("Pick from Map instead", style: TextStyle(color: Colors.blue, fontSize: 13)),
+                  const Icon(Icons.map_outlined, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    hasLocation ? "Wrong location? Fix on Map" : "Pick from Map manually", 
+                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
-          ],
+          ),
         ],
       ),
     );

@@ -1,43 +1,48 @@
 const mongoose = require('mongoose');
 
-const MessageSchema = new mongoose.Schema({
-  senderId: {
-    type: mongoose.Schema.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  text: {
-    type: String,
-    required: true,
-  },
-  read: {
-    type: Boolean,
-    default: false,
-  },
-  time: {
-    type: Date,
-    default: Date.now,
-  },
-});
-
 const ChatSchema = new mongoose.Schema({
   participants: [{
     type: mongoose.Schema.ObjectId,
     ref: 'User',
+    required: true,
   }],
   donationId: {
     type: mongoose.Schema.ObjectId,
     ref: 'Donation',
   },
-  messages: [MessageSchema],
   lastMessage: {
-    text: String,
-    time: Date,
+    type: mongoose.Schema.ObjectId,
+    ref: 'Message',
+  },
+  unreadCounts: {
+    type: Map,
+    of: Number,
+    default: {}
+  },
+  pinnedBy: [{
+    type: mongoose.Schema.ObjectId,
+    ref: 'User'
+  }],
+  isDeleted: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  }
 });
+
+ChatSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+ChatSchema.index({ participants: 1 });
+ChatSchema.index({ updatedAt: -1 });
 
 module.exports = mongoose.model('Chat', ChatSchema);

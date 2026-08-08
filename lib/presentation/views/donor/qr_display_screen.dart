@@ -46,7 +46,7 @@ class QrDisplayScreen extends StatelessWidget {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               Text(
-                "Donation ID: ${donation.id.substring(donation.id.length - 8).toUpperCase()}",
+                "Donation ID: ${donation.id.length >= 8 ? donation.id.substring(donation.id.length - 8).toUpperCase() : donation.id.toUpperCase()}",
                 style: const TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 60),

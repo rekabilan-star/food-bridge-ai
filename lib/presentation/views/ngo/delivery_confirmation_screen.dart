@@ -7,6 +7,8 @@ import '../../../data/models/donation_model.dart';
 import '../../../core/utils/ui_utils.dart';
 import '../../../core/theme/app_colors.dart';
 
+import '../../../services/location_service.dart';
+
 class DeliveryConfirmationScreen extends StatefulWidget {
   final DonationModel donation;
   const DeliveryConfirmationScreen({super.key, required this.donation});
@@ -28,9 +30,18 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
     _membersController.text = widget.donation.membersServed.toString();
   }
 
+  @override
+  void dispose() {
+    _membersController.dispose();
+    _notesController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+    if (!mounted) return;
     if (pickedFile != null) setState(() => _image = File(pickedFile.path));
   }
 
@@ -43,33 +54,45 @@ class _DeliveryConfirmationScreenState extends State<DeliveryConfirmationScreen>
 
       final viewModel = context.read<DonationViewModel>();
       
-      // 1. Upload photo
-      String? photoUrl;
+      // 1. Get Location
+      double finalLat = widget.donation.latitude;
+      double finalLng = widget.donation.longitude;
       try {
-          photoUrl = await viewModel.createDonation(widget.donation, _image) ? viewModel.currentDonation?.imageUrl : null;
-          // Note: In real app, we'd have a specific upload method, reusing createDonation logic for simplicity here
+          final loc = await LocationService().getProductionLocation(
+            onProgress: (msg) => debugPrint("Delivery Location: $msg")
+          );
+          finalLat = loc.latitude;
+          finalLng = loc.longitude;
       } catch (e) {
+          debugPrint("Delivery location capture failed: $e");
+      }
+
+      // 2. Upload photo
+      final photoUrl = await viewModel.uploadImage(_image!);
+      if (!mounted) return;
+      
+      if (photoUrl == null) {
           UIUtils.showErrorDialog(context, "Image upload failed");
           return;
       }
 
       final success = await viewModel.confirmDelivery(widget.donation.id, {
-        'photoUrl': photoUrl ?? 'https://via.placeholder.com/300',
+        'photoUrl': photoUrl,
         'address': _addressController.text,
-        'latitude': 13.0827, // Mock
-        'longitude': 80.2707, // Mock
+        'latitude': finalLat,
+        'longitude': finalLng,
         'membersServed': int.parse(_membersController.text),
         'notes': _notesController.text,
       });
 
+      if (!mounted) return;
+
       if (success) {
-        if (mounted) {
-          UIUtils.showSuccessDialog(context, "Donation Completed! Thank you for your service.", onOk: () {
-            Navigator.popUntil(context, (route) => route.isFirst);
-          });
-        }
+        UIUtils.showSuccessDialog(context, "Donation Completed! Thank you for your service.", onOk: () {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        });
       } else {
-        if (mounted) UIUtils.showErrorDialog(context, viewModel.errorMessage ?? "Completion failed");
+        UIUtils.showErrorDialog(context, viewModel.errorMessage ?? "Completion failed");
       }
     }
   }

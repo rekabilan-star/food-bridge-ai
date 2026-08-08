@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/location_provider_v2.dart';
-import '../../../core/utils/location_loading_dialog.dart';
 import '../../../core/utils/manual_location_picker.dart';
 import '../../../core/utils/ui_utils.dart';
+import '../../../core/utils/validators.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/custom_app_bar.dart';
 
 class DonorRegisterScreen extends StatefulWidget {
   const DonorRegisterScreen({super.key});
@@ -23,7 +27,36 @@ class _DonorRegisterScreenState extends State<DonorRegisterScreen> {
   final _addressController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+        locProvider.fetchLocation().then((_) {
+          _onLocationDetected();
+        });
+        locProvider.addListener(_onLocationDetected);
+      }
+    });
+  }
+
+  void _onLocationDetected() {
+    if (!mounted) return;
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    if (locProvider.location != null && !locProvider.isLoading) {
+      if (locProvider.location!.fullAddress.isNotEmpty) {
+        setState(() {
+          _addressController.text = locProvider.location!.fullAddress;
+        });
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    try {
+      Provider.of<LocationProviderV2>(context, listen: false).removeListener(_onLocationDetected);
+    } catch (_) {}
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -32,135 +65,183 @@ class _DonorRegisterScreenState extends State<DonorRegisterScreen> {
     super.dispose();
   }
 
-  void _startLocationCapture() async {
-    final locationProvider = context.read<LocationProviderV2>();
-    locationProvider.fetchLocation();
-    if (!mounted) return;
-    LocationLoadingDialog.show(context);
-    
-    // Listen for completion or error
-    void listener() {
-      if (locationProvider.error != null) {
-        locationProvider.removeListener(listener);
-        // Optional: Auto-open manual picker on error
-        // _pickManualLocation(); 
-      } else if (locationProvider.location != null) {
-        locationProvider.removeListener(listener);
-      }
-    }
-    locationProvider.addListener(listener);
-  }
-
-  void _pickManualLocation() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ManualLocationPicker()),
-    );
-    if (result != null) {
-      context.read<LocationProviderV2>().setManualLocation(result);
-      _addressController.text = result.fullAddress;
-    }
-  }
-
   void _register() async {
     if (_formKey.currentState!.validate()) {
-      final location = context.read<LocationProviderV2>().location;
+      final locProvider = context.read<LocationProviderV2>();
       
-      if (location == null) {
-        UIUtils.showErrorDialog(context, "GPS Location Required. Please tap the location button.");
+      if (locProvider.location == null) {
+        UIUtils.showErrorDialog(
+          context, 
+          "Location Required: Your real-time location is mandatory for rescue logistics. Please enable GPS or select on map.",
+        );
         return;
       }
 
+      final location = locProvider.location!;
+
       final success = await context.read<AuthViewModel>().registerDonor(
-        name: _nameController.text,
-        email: _emailController.text,
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
         password: _passwordController.text,
-        phoneNumber: _phoneController.text,
-        address: _addressController.text.isEmpty ? location.fullAddress : _addressController.text,
+        phoneNumber: _phoneController.text.trim(),
+        address: _addressController.text.isEmpty ? location.fullAddress : _addressController.text.trim(),
         latitude: location.latitude,
         longitude: location.longitude,
       );
 
+      if (!mounted) return;
+
       if (success) {
-        if (!mounted) return;
         UIUtils.showSuccessDialog(
           context, 
-          "Registration Successful! Please login.",
-          onOk: () => Navigator.pop(context)
+          "Success! Your account is active. Start saving food now.",
+          onOk: () => Navigator.pop(context),
         );
       } else {
-        if (!mounted) return;
-        UIUtils.showErrorDialog(
-          context, 
-          context.read<AuthViewModel>().errorMessage ?? "Registration Failed"
-        );
+        UIUtils.showErrorDialog(context, context.read<AuthViewModel>().errorMessage ?? "Registration failed.");
       }
+    }
+  }
+
+  void _pickManualLocation() async {
+    final locProvider = context.read<LocationProviderV2>();
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManualLocationPicker(
+          initialLat: locProvider.location?.latitude,
+          initialLng: locProvider.location?.longitude,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      locProvider.setManualLocation(result);
+      setState(() {
+        _addressController.text = result.fullAddress;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authViewModel = context.watch<AuthViewModel>();
-    final locationProvider = context.watch<LocationProviderV2>();
-
-    if (locationProvider.location != null && _addressController.text.isEmpty) {
-        _addressController.text = locationProvider.location!.fullAddress;
-    }
+    final authVM = context.watch<AuthViewModel>();
+    final locProvider = context.watch<LocationProviderV2>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Donor Registration")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(
+        title: "Create Donor Account",
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: "Full Name", prefixIcon: Icon(Icons.person_outline)),
-                validator: (value) => value!.isEmpty ? "Enter name" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.email_outlined)),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) => value!.isEmpty ? "Enter email" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: "Password", prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-                validator: (value) => value!.length < 6 ? "Minimum 6 characters" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: "Phone Number", prefixIcon: Icon(Icons.phone_outlined)),
-                keyboardType: TextInputType.phone,
-                validator: (value) => value!.isEmpty ? "Enter phone" : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: "Address", 
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                  helperText: "Detect location or type manually",
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: AppColors.border, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-                maxLines: 2,
-                validator: (value) => value!.isEmpty ? "Enter address" : null,
-              ),
-              const SizedBox(height: 16),
-              _buildLocationCaptureBox(locationProvider),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.35),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.volunteer_activism_rounded,
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Join the Rescue Movement",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    ModernTextField(
+                      controller: _nameController,
+                      label: "Full Name",
+                      prefixIcon: Icons.person_outline_rounded,
+                      validator: Validators.validateName,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    ModernTextField(
+                      controller: _emailController,
+                      label: "Email Address",
+                      prefixIcon: Icons.alternate_email_rounded,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: Validators.validateEmail,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    ModernTextField(
+                      controller: _passwordController,
+                      label: "Create Password",
+                      prefixIcon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                      validator: Validators.validatePassword,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    ModernTextField(
+                      controller: _phoneController,
+                      label: "Phone Number",
+                      prefixIcon: Icons.phone_android_rounded,
+                      keyboardType: TextInputType.phone,
+                      validator: Validators.validatePhone,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    ModernTextField(
+                      controller: _addressController,
+                      label: "Business/Home Address",
+                      prefixIcon: Icons.location_on_outlined,
+                      maxLines: 2,
+                      validator: (v) => Validators.validateRequired(v, "Address"),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    _buildLocationBox(locProvider),
+
+                    const SizedBox(height: 32),
+
+                    PrimaryButton(
+                      text: "GET STARTED",
+                      isLoading: authVM.isLoading || locProvider.isLoading,
+                      onPressed: _register,
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0),
+
               const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: authViewModel.isLoading || locationProvider.isLoading ? null : _register,
-                child: authViewModel.isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("REGISTER AS DONOR"),
-              ),
             ],
           ),
         ),
@@ -168,22 +249,28 @@ class _DonorRegisterScreenState extends State<DonorRegisterScreen> {
     );
   }
 
-  Widget _buildLocationCaptureBox(LocationProviderV2 provider) {
-    final hasLocation = provider.location != null;
+  Widget _buildLocationBox(LocationProviderV2 provider) {
+    final bool hasLocation = provider.location != null;
+    final bool isError = provider.error != null;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: hasLocation ? Colors.green : Colors.grey[300]!),
+        color: hasLocation ? AppColors.success.withValues(alpha: 0.06) : AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: hasLocation ? AppColors.success.withValues(alpha: 0.3) : (isError ? AppColors.error.withValues(alpha: 0.3) : AppColors.border),
+          width: 1.5,
+        ),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Icon(
-                hasLocation ? Icons.check_circle : Icons.gps_fixed, 
-                color: hasLocation ? Colors.green : AppColors.primary
+                hasLocation ? Icons.check_circle_rounded : (isError ? Icons.location_off_rounded : Icons.gps_fixed_rounded), 
+                color: hasLocation ? AppColors.success : (isError ? AppColors.error : AppColors.primary), 
+                size: 22,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -191,41 +278,72 @@ class _DonorRegisterScreenState extends State<DonorRegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      hasLocation ? "Location Verified" : "GPS Status",
+                      provider.isLoading 
+                          ? "Detecting location..." 
+                          : (hasLocation ? "Location Verified" : (isError ? "Detection Failed" : "GPS Location")), 
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: hasLocation ? Colors.green : Colors.black87
+                        fontWeight: FontWeight.w700, 
+                        color: hasLocation ? AppColors.success : (isError ? AppColors.error : AppColors.textPrimary), 
+                        fontSize: 14,
                       ),
                     ),
-                    Text(
-                      hasLocation 
-                        ? "Coords: ${provider.location!.latitude.toStringAsFixed(4)}, ${provider.location!.longitude.toStringAsFixed(4)}"
-                        : "Location capture required for delivery",
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
+                    const SizedBox(height: 2),
+                    if (hasLocation) ...[
+                      Text(
+                        provider.accuracyStatus,
+                        style: const TextStyle(fontSize: 11, color: AppColors.success, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        "Lat: ${provider.location!.latitude.toStringAsFixed(4)} | Lng: ${provider.location!.longitude.toStringAsFixed(4)}",
+                        style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                      ),
+                    ] else
+                      Text(
+                        isError ? provider.error!.message : "Real-time verification required", 
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
                   ],
                 ),
               ),
-              TextButton(
-                onPressed: _startLocationCapture, 
-                child: Text(hasLocation ? "RE-SCAN" : "GET GPS")
-              ),
+              if (!provider.isLoading)
+                IconButton(
+                  onPressed: () async {
+                    await provider.fetchLocation();
+                    if (mounted && provider.location != null) {
+                      setState(() {
+                        _addressController.text = provider.location!.fullAddress;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 22),
+                  tooltip: "Refresh GPS & Auto-fill Address",
+                )
+              else
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                ),
             ],
           ),
-          if (!hasLocation) ...[
-            const Divider(height: 24),
-            InkWell(
-              onTap: _pickManualLocation,
-              child: const Row(
+          const Divider(height: 20, color: AppColors.border),
+          InkWell(
+            onTap: _pickManualLocation,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.map, size: 16, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text("Pick from Map instead", style: TextStyle(color: Colors.blue, fontSize: 13)),
+                  const Icon(Icons.map_outlined, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    hasLocation ? "Not your location? Fix on Map" : "Unable to detect? Pick on Map",
+                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
-          ],
+          ),
         ],
       ),
     );

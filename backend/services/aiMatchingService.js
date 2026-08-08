@@ -1,66 +1,138 @@
 const User = require('../models/User');
-const geolib = require('geolib'); // We'll need to install this
+
+/**
+ * Find nearby NGOs using MongoDB Geospatial queries
+ */
+exports.getNearbyNgos = async (latitude, longitude, maxDistanceKm = 15) => {
+    try {
+        if (!latitude || !longitude) return [];
+
+        return await User.aggregate([
+            {
+                $geoNear: {
+                    near: {
+                        type: "Point",
+                        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+                    },
+                    distanceField: "distance",
+                    maxDistance: maxDistanceKm * 1000,
+                    query: {
+                        role: 'ngo',
+                        status: 'approved',
+                        availabilityStatus: { $in: ['Available', 'Busy'] }
+                    },
+                    spherical: true
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    phoneNumber: 1,
+                    address: 1,
+                    distance: 1,
+                    averageRating: 1,
+                    availabilityStatus: 1,
+                    profileImage: 1
+                }
+            },
+            { $limit: 15 }
+        ]);
+    } catch (err) {
+        console.error('Nearby NGO Search Error:', err);
+        return [];
+    }
+};
 
 /**
  * AI Recommendation Engine for Food Matching
- * Factors: Distance, NGO Capacity, Food Type, Expiry Time
+ * Logic: Distance (35%), ETA (15%), Urgency (25%), Availability (15%), Rating (10%)
  */
 exports.recommendNgos = async (donation) => {
     try {
-        // 1. Fetch all approved and available NGOs
-        const ngos = await User.find({
-            role: 'ngo',
-            status: 'approved',
-            availabilityStatus: 'Available'
-        });
+        const nearbyNgos = await this.getNearbyNgos(donation.latitude, donation.longitude);
+        const now = new Date();
+        const bestBefore = new Date(donation.bestBeforeTime);
+        const prepared = new Date(donation.preparedTime);
 
-        const scoredNgos = ngos.map(ngo => {
+        // Calculate Global Donation Factors
+        const hoursTotal = (bestBefore - prepared) / (1000 * 60 * 60);
+        const hoursLeft = (bestBefore - now) / (1000 * 60 * 60);
+        const freshnessPercentage = Math.max(0, Math.min(100, (hoursLeft / hoursTotal) * 100));
+        const isUrgent = hoursLeft < 3;
+
+        const scoredNgos = nearbyNgos.map(ngo => {
             let score = 0;
-            const reasons = [];
+            const explanations = [];
+            const metrics = {
+                distance: (ngo.distance / 1000).toFixed(1),
+                eta: Math.round((ngo.distance / 1000) * 4 + 5),
+            };
 
-            // Factor 1: Distance (Weight: 40%)
-            if (ngo.latitude && ngo.longitude) {
-                const distance = geolib.getDistance(
-                    { latitude: donation.latitude, longitude: donation.longitude },
-                    { latitude: ngo.latitude, longitude: ngo.longitude }
-                );
+            // 1. Distance Score (Max 30) - Heavy optimization for proximity
+            const distKm = ngo.distance / 1000;
+            const distScore = Math.max(0, 30 - (distKm * 2));
+            score += distScore;
 
-                // Max score if distance < 5km, decreases as distance increases
-                const distanceScore = Math.max(0, 40 - (distance / 1000) * 2);
-                score += distanceScore;
-                reasons.push(`Distance: ${(distance / 1000).toFixed(1)} km`);
+            // 2. ETA & Freshness Sync (Max 30) - The "Intelligence" core
+            // We reward fast NGOs more when the food is less fresh
+            let freshnessImpact = 0;
+            if (freshnessPercentage < 25) { // Critical
+                freshnessImpact = metrics.eta < 15 ? 30 : (metrics.eta < 30 ? 20 : 5);
+                if (metrics.eta < 15) explanations.push("CRITICAL: Immediate rescue recommended due to extremely low shelf life.");
+            } else if (freshnessPercentage < 50) { // High
+                freshnessImpact = metrics.eta < 25 ? 25 : 15;
+                explanations.push(`Urgent: Food is at ${Math.round(freshnessPercentage)}% freshness. Partner can arrive within ${metrics.eta} mins.`);
+            } else { // Moderate
+                freshnessImpact = 15;
+                explanations.push(`Optimal: Food is fresh (${Math.round(freshnessPercentage)}%).`);
             }
+            score += freshnessImpact;
 
-            // Factor 2: Expiry Time (Weight: 30%)
-            const timeToExpiry = (new Date(donation.bestBeforeTime) - new Date()) / (1000 * 60 * 60);
-            if (timeToExpiry < 3) {
-                // Critical: Prefer NGOs with "Busy" but high capacity or specific urgent flags
-                // For now, if it's very fresh, distance is even more important
+            // 3. NGO Availability (Max 20)
+            if (ngo.availabilityStatus === 'Available') {
+                score += 20;
+                explanations.push("Partner is standby and ready for instant dispatch.");
+            } else {
                 score += 10;
-                reasons.push('Urgent: Short expiry time');
+                explanations.push("Partner is currently active on another route but can redirect if needed.");
             }
 
-            // Factor 3: Rating (Weight: 20%)
-            const ratingScore = (ngo.averageRating || 0) * 4; // Max 20
-            score += ratingScore;
-            reasons.push(`NGO Rating: ${ngo.averageRating}/5`);
+            // 4. Rating & Reliability (Max 20)
+            const reliabilityScore = (ngo.averageRating || 3) * 4; // Default to 3 star if new
+            score += reliabilityScore;
+            if (ngo.averageRating >= 4.0) explanations.push(`Verified partner with a high reliability rating of ${ngo.averageRating}/5.`);
 
-            // Factor 4: Capacity (Weight: 10%)
-            // Assuming NGOs have a capacity field or we estimate based on members served history
-            score += 10;
-            reasons.push('Capacity: Sufficient for this donation');
+            // 5. Confidence Calculation
+            // High confidence if we have multiple strong signals (Distance < 5km AND Rating > 4 AND Available)
+            let confidence = 70; // Base confidence
+            if (distKm < 5) confidence += 10;
+            if (ngo.averageRating >= 4) confidence += 10;
+            if (ngo.availabilityStatus === 'Available') confidence += 10;
+            confidence = Math.min(99, confidence);
+
+            const finalScore = Math.min(100, Math.round(score));
 
             return {
                 ngoId: ngo._id,
                 name: ngo.name,
                 phoneNumber: ngo.phoneNumber,
-                score: Math.round(score),
-                reasons
+                distanceKm: parseFloat(metrics.distance),
+                etaMinutes: metrics.eta,
+                etaText: metrics.eta > 60 ? `${Math.floor(metrics.eta/60)}h ${metrics.eta%60}m` : `${metrics.eta} mins`,
+                score: finalScore,
+                confidence: confidence,
+                availability: ngo.availabilityStatus,
+                reasons: explanations,
+                explanation: explanations.join(' ')
             };
         });
 
-        // Sort by highest score
-        return scoredNgos.sort((a, b) => b.score - a.score).slice(0, 5);
+        // Sort by highest score and filter out very low matches
+        return scoredNgos
+            .sort((a, b) => b.score - a.score)
+            .filter(n => n.score > 30)
+            .slice(0, 5);
     } catch (err) {
         console.error('AI Matching Error:', err);
         return [];

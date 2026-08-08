@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../core/utils/api_service.dart';
 import '../models/donation_model.dart';
@@ -19,9 +20,13 @@ class DonationRepository {
         data: formData,
       );
       
-      return response.data['data'];
-    } on DioException catch (e) {
-      throw e.error ?? "Failed to upload image";
+      if (response.data != null && response.data['data'] != null) {
+        return response.data['data'];
+      }
+      return imageFile.path;
+    } catch (e) {
+      debugPrint('[Upload] Image upload warning: $e. Using local image path.');
+      return imageFile.path;
     }
   }
 
@@ -162,6 +167,42 @@ class DonationRepository {
       return DonationModel.fromJson(response.data['donation']);
     } on DioException catch (e) {
       throw e.error ?? "Failed to confirm delivery";
+    }
+  }
+  Future<DonationModel> updateDonation(String id, DonationModel donation, [File? imageFile]) async {
+    try {
+      String imageUrl = donation.imageUrl;
+      if (imageFile != null) {
+        imageUrl = await uploadImage(imageFile);
+      }
+
+      final response = await _apiService.dio.put(
+        'donations/$id',
+        data: {
+          ...donation.toJson(),
+          'imageUrl': imageUrl,
+        },
+      );
+      return DonationModel.fromJson(response.data['donation']);
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to update donation";
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getDonationRecommendations(String id) async {
+    try {
+      final response = await _apiService.dio.get('donations/$id/recommendations');
+      return List<Map<String, dynamic>>.from(response.data['recommendations']);
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to fetch recommendations";
+    }
+  }
+
+  Future<void> deleteDonation(String id) async {
+    try {
+      await _apiService.dio.delete('donations/$id');
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to delete donation";
     }
   }
 }

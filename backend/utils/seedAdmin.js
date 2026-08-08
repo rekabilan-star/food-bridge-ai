@@ -1,8 +1,15 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const dotenv = require('dotenv');
+const dns = require('dns');
 
-dotenv.config({ path: '../.env' });
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setDefaultResultOrder('ipv4first');
+
+dotenv.config({ path: './.env' });
+if (!process.env.MONGODB_URI) {
+    dotenv.config({ path: '../.env' });
+}
 
 const seedAdmin = async () => {
   try {

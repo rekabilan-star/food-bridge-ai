@@ -1,128 +1,338 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/user_model.dart';
+import 'edit_profile_screen.dart';
+import 'impact_analytics_screen.dart';
+import 'donation_history_screen.dart';
+import 'widgets/custom_app_bar.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _darkMode = false;
+
+  @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthViewModel>().user;
-    if (user == null) return const Scaffold(body: Center(child: Text("Not logged in")));
+    final authVm = context.watch<AuthViewModel>();
+    final user = authVm.user;
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundLight,
+        body: const Center(child: Text("Not logged in")),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Profile")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(
+        title: "Profile",
+        showBackButton: false,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           children: [
-            _buildHeader(user),
-            const SizedBox(height: 32),
-            if (user.role == UserRole.ngo) _buildNgoStats(user)
-            else _buildDonorStats(user),
-            const SizedBox(height: 32),
-            _buildActions(context),
-          ],
-        ),
-      ),
-    );
-  }
+            // Profile Card Header
+            _buildProfileHeaderCard(user).animate().fadeIn(duration: 400.ms),
 
-  Widget _buildHeader(UserModel user) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 60,
-          backgroundColor: user.role == UserRole.ngo ? AppColors.ngoColor : AppColors.primary,
-          child: Text(user.name[0], style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(user.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            if (user.role == UserRole.ngo && user.status == 'approved')
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0),
-                child: Icon(Icons.verified, color: Colors.blue, size: 20),
+            const SizedBox(height: 24),
+
+            // Rescue Impact Action Summary
+            _buildImpactBanner(context).animate().fadeIn(delay: 150.ms),
+
+            const SizedBox(height: 28),
+
+            // Account Settings Group
+            _buildSectionHeader("ACCOUNT SETTINGS"),
+            _buildSettingsGroup([
+              _buildSettingTile("Edit Profile", Icons.person_outline_rounded, () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+              }),
+              _buildSettingTile("Donation History", Icons.history_rounded, () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const DonationHistoryScreen()));
+              }),
+              _buildSettingTile("Impact Analytics", Icons.bar_chart_rounded, () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpactAnalyticsScreen()));
+              }),
+              _buildSettingTile("Log Out", Icons.logout_rounded, () {
+                authVm.logout();
+                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+              }, iconColor: AppColors.error),
+            ]),
+
+            const SizedBox(height: 24),
+
+            // Security & Preferences Group
+            _buildSectionHeader("PREFERENCES & SECURITY"),
+            _buildSettingsGroup([
+              SwitchListTile(
+                secondary: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.fingerprint_rounded, color: AppColors.primary, size: 20),
+                ),
+                title: const Text(
+                  "Biometric Auth",
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                value: authVm.biometricEnabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: (val) => authVm.toggleBiometrics(val),
               ),
-          ],
-        ),
-        Text(user.email, style: const TextStyle(color: Colors.grey)),
-        if (user.role == UserRole.ngo)
-           Padding(
-             padding: const EdgeInsets.only(top: 8.0),
-             child: Row(
-               mainAxisAlignment: MainAxisAlignment.center,
-               children: [
-                 const Icon(Icons.star, color: Colors.amber, size: 16),
-                 Text(" ${user.averageRating.toStringAsFixed(1)} (${user.totalRatings} ratings)", style: const TextStyle(fontWeight: FontWeight.bold)),
-               ],
-             ),
-           ),
-      ],
-    );
-  }
+              SwitchListTile(
+                secondary: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.dark_mode_outlined, color: AppColors.primary, size: 20),
+                ),
+                title: const Text(
+                  "Dark Mode (UI Only)",
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                value: _darkMode,
+                activeThumbColor: AppColors.primary,
+                onChanged: (val) {
+                  setState(() {
+                    _darkMode = val;
+                  });
+                },
+              ),
+            ]),
 
-  Widget _buildDonorStats(UserModel user) {
-    return Row(
-      children: [
-        _buildStatCard("Total Donations", "12", Icons.volunteer_activism, Colors.green),
-        const SizedBox(width: 16),
-        _buildStatCard("Served", "450", Icons.people, Colors.blue),
-      ],
-    );
-  }
+            const SizedBox(height: 32),
 
-  Widget _buildNgoStats(UserModel user) {
-    return Row(
-      children: [
-        _buildStatCard("Pickups", "24", Icons.local_shipping, Colors.orange),
-        const SizedBox(width: 16),
-        _buildStatCard("Verified", "Yes", Icons.verified_user, Colors.blue),
-      ],
-    );
-  }
+            // Primary Logout Button
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  authVm.logout();
+                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                ),
+                icon: const Icon(Icons.logout_rounded, size: 22),
+                label: const Text(
+                  "LOG OUT OF ACCOUNT",
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+                ),
+              ),
+            ).animate().fadeIn(delay: 200.ms),
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.2))),
-        child: Column(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 120),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActions(BuildContext context) {
-    return Column(
-      children: [
-        _buildActionTile("Edit Profile", Icons.edit_outlined, () {}),
-        _buildActionTile("Notification Settings", Icons.notifications_none, () {}),
-        _buildActionTile("Help & Support", Icons.help_outline, () {}),
-        _buildActionTile("Logout", Icons.logout, () {
-          context.read<AuthViewModel>().logout();
-          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-        }, isDestructive: true),
-      ],
+  Widget _buildProfileHeaderCard(UserModel user) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 44,
+              backgroundColor: AppColors.accent,
+              backgroundImage: user.profileImage != null ? NetworkImage(user.profileImage!) : null,
+              child: user.profileImage == null
+                  ? Text(
+                      user.name.isNotEmpty ? user.name[0].toUpperCase() : "U",
+                      style: const TextStyle(fontSize: 32, color: AppColors.primary, fontWeight: FontWeight.w700),
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            user.name,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            user.email,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              user.role.name.toUpperCase(),
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildActionTile(String title, IconData icon, VoidCallback onTap, {bool isDestructive = false}) {
+  Widget _buildImpactBanner(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: AppColors.primaryGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImpactAnalyticsScreen())),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Impact Score",
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        "View your food rescue contributions",
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 12),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsGroup(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSettingTile(String title, IconData icon, VoidCallback onTap, {Color? iconColor}) {
+    final color = iconColor ?? AppColors.primary;
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: isDestructive ? Colors.red : Colors.black87),
-      title: Text(title, style: TextStyle(color: isDestructive ? Colors.red : Colors.black87, fontWeight: isDestructive ? FontWeight.bold : FontWeight.normal)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: iconColor ?? AppColors.textPrimary),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textSecondary),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 }

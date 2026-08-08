@@ -14,9 +14,19 @@ const NotificationSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  type: {
+  category: {
     type: String,
-    default: 'info'
+    enum: ['DONATION', 'CHAT', 'SYSTEM', 'PROFILE', 'EMERGENCY', 'ANNOUNCEMENT'],
+    default: 'SYSTEM'
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high'],
+    default: 'medium'
+  },
+  data: {
+    type: Object,
+    default: {}
   },
   read: {
     type: Boolean,
@@ -27,5 +37,10 @@ const NotificationSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+// Indexing for faster queries
+NotificationSchema.index({ userId: 1, createdAt: -1 });
+NotificationSchema.index({ userId: 1, read: 1 });
+NotificationSchema.index({ category: 1 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);
