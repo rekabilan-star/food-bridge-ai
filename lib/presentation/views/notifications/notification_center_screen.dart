@@ -3,10 +3,18 @@ import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/notification_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/notification_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../common/widgets/custom_app_bar.dart';
 import '../common/widgets/shimmer_loading.dart';
+import '../ngo/donation_details_screen.dart';
+import '../ngo/ngo_tracking_screen.dart';
+import '../ngo/ngo_donation_requests_screen.dart';
+import '../common/donation_tracking_screen.dart';
+import '../donor/donor_dashboard_screen.dart';
 
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
@@ -25,11 +33,10 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final vm = Provider.of<NotificationViewModel>(context, listen: false);
       vm.fetchNotifications(refresh: true);
-      vm.initSocketListeners();
     });
 
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
         Provider.of<NotificationViewModel>(context, listen: false).fetchNotifications();
       }
     });
@@ -42,6 +49,58 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     super.dispose();
   }
 
+  void _handleNotificationTap(BuildContext context, NotificationModel notification) async {
+    final authVM = context.read<AuthViewModel>();
+    final donationVM = context.read<DonationViewModel>();
+
+    final userRole = authVM.user?.role;
+    final String? donationId = notification.data['donationId']?.toString() ?? notification.data['id']?.toString();
+
+    if (donationId != null && donationId.isNotEmpty) {
+      await donationVM.fetchDonationDetails(donationId);
+      final donation = donationVM.currentDonation;
+      if (context.mounted && donation != null) {
+        if (userRole == UserRole.ngo) {
+          if (donation.status == 'accepted' || donation.status == 'on_the_way' || donation.status == 'arrived' || donation.status == 'picked_up') {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
+          } else {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
+          }
+        } else {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
+        }
+        return;
+      }
+    }
+
+    // Category fallback navigation
+    if (notification.category == 'DONATION' || notification.category == 'EMERGENCY') {
+      if (context.mounted) {
+        if (userRole == UserRole.ngo) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen()));
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const DonorDashboardScreen(initialIndex: 1)),
+            (route) => false,
+          );
+        }
+      }
+    } else if (notification.category == 'CHAT') {
+      if (context.mounted) {
+        Navigator.pushNamed(context, '/chats');
+      }
+    } else {
+      if (context.mounted) {
+        if (userRole == UserRole.ngo) {
+          Navigator.pushNamedAndRemoveUntil(context, '/ngo-dashboard', (route) => false);
+        } else {
+          Navigator.pushNamedAndRemoveUntil(context, '/donor-dashboard', (route) => false);
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,49 +108,55 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
       appBar: CustomAppBar(
         title: "Notifications",
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textPrimary),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            onSelected: (value) {
+          IconButton(
+            icon: const Icon(Icons.done_all_rounded, color: AppColors.primary, size: 22),
+            tooltip: "Mark all as read",
+            onPressed: () {
               final vm = Provider.of<NotificationViewModel>(context, listen: false);
-              if (value == 'read_all') {
-                vm.markAllAsRead();
-              } else if (value == 'delete_all') {
-                vm.deleteAll();
-              }
+              vm.markAllAsRead();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("All notifications marked as read")),
+              );
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'read_all', child: Text('Mark all as read')),
-              const PopupMenuItem(value: 'delete_all', child: Text('Clear Inbox', style: TextStyle(color: AppColors.error))),
-            ],
           ),
-          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.textSecondary, size: 22),
+            tooltip: "Clear all",
+            onPressed: () {
+              final vm = Provider.of<NotificationViewModel>(context, listen: false);
+              vm.deleteAll();
+            },
+          ),
         ],
       ),
       body: CustomScrollView(
         controller: _scrollController,
         physics: const BouncingScrollPhysics(),
         slivers: [
+
           SliverToBoxAdapter(
             child: _buildSearchAndFilters(),
           ),
+
           Consumer<NotificationViewModel>(
             builder: (context, vm, child) {
               if (vm.isLoading && vm.notifications.isEmpty) {
                 return const SliverFillRemaining(
                   child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: ShimmerListLoading(count: 5),
+                    padding: EdgeInsets.all(20.0),
+                    child: ShimmerListLoading(count: 6),
                   ),
                 );
               }
 
               if (vm.notifications.isEmpty) {
-                return SliverFillRemaining(child: _buildEmptyState());
+                return SliverFillRemaining(
+                  child: _buildEmptyState(),
+                );
               }
 
               return SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -109,7 +174,10 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _NotificationCard(
                           notification: notification,
-                          onTap: () => vm.markAsRead(notification.id),
+                          onTap: () {
+                            vm.markAsRead(notification.id);
+                            _handleNotificationTap(context, notification);
+                          },
                           onDelete: () => vm.deleteNotification(notification.id),
                         ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0),
                       );

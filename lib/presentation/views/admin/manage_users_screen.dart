@@ -184,12 +184,128 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               ],
             ),
             trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-            onTap: () {
-                // Show detail sheet
-            },
+            onTap: () => _showUserDetailSheet(user),
           ),
         ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1, end: 0);
       },
+    );
+  }
+
+  void _showUserDetailSheet(UserModel user) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
+                  child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role), size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(user.role.name.toUpperCase(), style: TextStyle(color: _getRoleColor(user.role), fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                _buildStatusChip(user.status ?? 'pending'),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 12),
+            _buildDetailRow(Icons.email_rounded, user.email),
+            _buildDetailRow(Icons.phone_rounded, user.phoneNumber),
+            if (user.address != null && user.address!.isNotEmpty)
+              _buildDetailRow(Icons.location_on_rounded, user.address!),
+            if (user.ngoRegistrationNumber != null && user.ngoRegistrationNumber!.isNotEmpty)
+              _buildDetailRow(Icons.badge_rounded, "Registration No: ${user.ngoRegistrationNumber}"),
+            const SizedBox(height: 24),
+            if (user.role == UserRole.ngo || user.status == 'pending') ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _handleStatusUpdate(user.id, 'rejected');
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        minimumSize: const Size(0, 50),
+                      ),
+                      child: const Text("REJECT", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _handleStatusUpdate(user.id, 'approved');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        minimumSize: const Size(0, 50),
+                      ),
+                      child: const Text("APPROVE", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleStatusUpdate(String id, String status) async {
+    final success = await context.read<AdminViewModel>().updateNgoStatus(id, status);
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("NGO status updated to ${status.toUpperCase()}")),
+        );
+        _onSearch(page: _currentPage);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.read<AdminViewModel>().errorMessage ?? "Failed to update status")),
+        );
+      }
+    }
+  }
+
+  Widget _buildDetailRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500))),
+        ],
+      ),
     );
   }
 

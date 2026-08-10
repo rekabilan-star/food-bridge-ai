@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/donation_model.dart';
@@ -71,27 +69,8 @@ class AdminViewModel extends ChangeNotifier {
       _stats = await _repository.getDashboardStats();
       _errorMessage = null;
     } catch (e) {
-      _stats = {
-        'counts': {
-          'totalDonors': 0,
-          'totalNGOs': 0,
-          'pendingNGOs': 0,
-          'completedDonations': 0,
-          'activeDonations': 0,
-        },
-        'impact': {
-          'mealsServed': 0,
-          'co2Saved': 0,
-          'foodSavedKg': 0,
-          'membersServed': 0,
-        },
-        'charts': {
-          'dailyDonations': [],
-          'categories': [],
-        },
-        'recentActivity': [],
-      };
-      _errorMessage = null;
+      _errorMessage = e.toString();
+      _stats = {};
     }
     _setLoading(false);
   }
@@ -106,6 +85,7 @@ class AdminViewModel extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
+      _users = [];
     }
     _setLoading(false);
   }
@@ -119,60 +99,8 @@ class AdminViewModel extends ChangeNotifier {
       ngoTotalPages = result['pagination']['pages'] ?? 1;
       _errorMessage = null;
     } catch (e) {
-      // Fetch applied pending NGOs directly from local registered_users_registry
-      final List<UserModel> pendingList = [];
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final regJson = prefs.getString('registered_users_registry');
-        if (regJson != null) {
-          final Map<String, dynamic> regMap = json.decode(regJson);
-          for (var entry in regMap.values) {
-            if (entry is Map && entry.containsKey('user')) {
-              final u = UserModel.fromJson(Map<String, dynamic>.from(entry['user']));
-              final targetStatus = status ?? 'pending';
-              final userStatus = u.status ?? 'pending';
-              if (u.role == UserRole.ngo && userStatus.toLowerCase() == targetStatus.toLowerCase()) {
-                if (search == null || search.isEmpty || u.name.toLowerCase().contains(search.toLowerCase()) || u.email.toLowerCase().contains(search.toLowerCase())) {
-                  pendingList.add(u);
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        debugPrint("Error reading registered pending NGOs: $err");
-      }
-
-      // Add default sample records if registry has no matching pending entries
-      if (pendingList.isEmpty) {
-        pendingList.addAll([
-          UserModel(
-            id: 'ngo_pending_01',
-            name: 'Smile Foundation India',
-            email: 'partner@smilefoundation.org',
-            role: UserRole.ngo,
-            phoneNumber: '+91 9845012345',
-            address: '42, Indiranagar 100ft Road, Bengaluru',
-            status: 'pending',
-            ngoRegistrationNumber: 'Aadhaar Card',
-          ),
-          UserModel(
-            id: 'ngo_pending_02',
-            name: 'Akshaya Patra Regional Hub',
-            email: 'rescue@akshayapatra.org',
-            role: UserRole.ngo,
-            phoneNumber: '+91 9900112233',
-            address: '88, Rajajinagar Industrial Area, Bengaluru',
-            status: 'pending',
-            ngoRegistrationNumber: 'Driving License',
-          ),
-        ]);
-      }
-
-      _ngos = pendingList;
-      ngoPage = 1;
-      ngoTotalPages = 1;
-      _errorMessage = null;
+      _errorMessage = e.toString();
+      _ngos = [];
     }
     _setLoading(false);
   }
@@ -187,6 +115,7 @@ class AdminViewModel extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
+      _donations = [];
     }
     _setLoading(false);
   }
@@ -195,42 +124,18 @@ class AdminViewModel extends ChangeNotifier {
     _setLoading(true);
     try {
       await _repository.updateNgoStatus(id, status);
+      _errorMessage = null;
     } catch (e) {
-      debugPrint("Admin API updateNgoStatus warning: $e");
-    }
-
-    // Persist status change in local registered_users_registry
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final regJson = prefs.getString('registered_users_registry');
-      if (regJson != null) {
-        final Map<String, dynamic> regMap = json.decode(regJson);
-        final targetId = id.trim().toLowerCase();
-        for (var key in regMap.keys) {
-          final account = Map<String, dynamic>.from(regMap[key]);
-          if (account['user'] != null) {
-            final uId = account['user']['id']?.toString().toLowerCase() ?? '';
-            final uEmail = account['user']['email']?.toString().toLowerCase() ?? '';
-            final k = key.trim().toLowerCase();
-            
-            if (uId == targetId || uEmail == targetId || k == targetId) {
-              account['user']['status'] = status;
-              regMap[key] = account;
-              await prefs.setString('registered_users_registry', json.encode(regMap));
-              debugPrint("[Admin] Persisted status $status for NGO account $key");
-              break;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      debugPrint("Error updating registry status: $err");
+      _errorMessage = e.toString();
+      _setLoading(false);
+      return false;
     }
 
     _ngos.removeWhere((n) => n.id == id);
+    _users.removeWhere((u) => u.id == id);
     if (_stats.containsKey('counts') && _stats['counts'].containsKey('pendingNGOs')) {
       final count = _stats['counts']['pendingNGOs'] as int;
-      if (count > 0) {
+      if (count > 0 && status == 'approved') {
         _stats['counts']['pendingNGOs'] = count - 1;
       }
     }

@@ -132,25 +132,7 @@ class AuthViewModel extends ChangeNotifier {
     final trimmedEmail = email.trim().toLowerCase();
     final trimmedPass = password.trim();
 
-    // 1. Authorized System Admin Credentials Check
-    if (trimmedEmail == 'kabilanr@gmail.com' && trimmedPass == '15060908') {
-      _user = UserModel(
-        id: 'admin_kabilanr',
-        name: 'Kabilan R',
-        email: 'kabilanr@gmail.com',
-        role: UserRole.admin,
-        phoneNumber: '+91 9876543210',
-        address: 'Command Center Headquarters, Bengaluru',
-        status: 'approved',
-      );
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-      await _initializeServices();
-      _setLoading(false);
-      return true;
-    }
-
-    // 2. Try Backend Database Login API
+    // 1. Try Backend Database Login API
     try {
       _user = await _authRepository.login(email, password);
       await _initializeServices();
@@ -384,25 +366,14 @@ class AuthViewModel extends ChangeNotifier {
   Future<bool> refreshApprovalStatus() async {
     if (_user == null) return false;
     try {
+      final updatedUser = await _authRepository.getProfile();
+      _user = updatedUser;
       final prefs = await SharedPreferences.getInstance();
-      final regJson = prefs.getString('registered_users_registry');
-      if (regJson != null) {
-        final Map<String, dynamic> regMap = json.decode(regJson);
-        final userEmail = _user!.email.trim().toLowerCase();
-        if (regMap.containsKey(userEmail)) {
-          final account = Map<String, dynamic>.from(regMap[userEmail]);
-          final u = UserModel.fromJson(Map<String, dynamic>.from(account['user']));
-          final uStatus = (u.status ?? 'approved').toLowerCase();
-          if (uStatus == 'approved') {
-            _user = u;
-            await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-            _safeNotify();
-            return true;
-          }
-        }
-      }
+      await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
+      _safeNotify();
+      return (updatedUser.status ?? 'approved').toLowerCase() == 'approved';
     } catch (e) {
-      debugPrint("Error refreshing approval status: $e");
+      debugPrint("Error refreshing approval status from backend: $e");
     }
     return (_user?.status ?? 'approved').toLowerCase() == 'approved';
   }

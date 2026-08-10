@@ -363,25 +363,42 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
 
   Widget _buildDocTile(String label, IconData icon, bool isUploaded) {
     return Container(
-      height: 80,
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: isUploaded ? AppColors.success.withValues(alpha: 0.08) : AppColors.backgroundLight,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: isUploaded ? AppColors.success : AppColors.border, width: 1.5),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
-          Icon(icon, color: isUploaded ? AppColors.success : AppColors.primary, size: 22),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: isUploaded ? AppColors.success : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isUploaded ? AppColors.success.withValues(alpha: 0.15) : AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: isUploaded ? AppColors.success : AppColors.primary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              softWrap: true,
+              style: TextStyle(
+                fontSize: 13,
+                color: isUploaded ? AppColors.success : AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
             ),
           ),
+          if (isUploaded) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
+          ],
         ],
       ),
     );

@@ -4,13 +4,28 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 
-class NgoApprovalPendingScreen extends StatelessWidget {
+class NgoApprovalPendingScreen extends StatefulWidget {
   const NgoApprovalPendingScreen({super.key});
+
+  @override
+  State<NgoApprovalPendingScreen> createState() => _NgoApprovalPendingScreenState();
+}
+
+class _NgoApprovalPendingScreenState extends State<NgoApprovalPendingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Check status on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthViewModel>().refreshApprovalStatus();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final authVm = context.watch<AuthViewModel>();
     final user = authVm.user;
+    final isApproved = (user?.status ?? 'pending').toLowerCase() == 'approved';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -40,22 +55,22 @@ class NgoApprovalPendingScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
+                  color: isApproved ? Colors.teal.shade50 : Colors.amber.shade50,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.amber.shade200, width: 2),
+                  border: Border.all(color: isApproved ? Colors.teal.shade200 : Colors.amber.shade200, width: 2),
                 ),
                 child: Icon(
-                  Icons.hourglass_top_rounded,
+                  isApproved ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
                   size: 64,
-                  color: Colors.amber.shade800,
+                  color: isApproved ? Colors.teal.shade800 : Colors.amber.shade800,
                 ),
               ).animate().scale(duration: 500.ms),
 
               const SizedBox(height: 28),
 
               Text(
-                "Approval Pending",
-                style: TextStyle(
+                isApproved ? "Approved" : "Approval Pending",
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary,
@@ -68,15 +83,15 @@ class NgoApprovalPendingScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade100,
+                  color: isApproved ? Colors.teal.shade100 : Colors.amber.shade100,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  "STATUS: ADMIN REVIEW IN PROGRESS",
+                  isApproved ? "STATUS: ACCOUNT APPROVED" : "STATUS: ADMIN REVIEW IN PROGRESS",
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    color: Colors.amber.shade900,
+                    color: isApproved ? Colors.teal.shade900 : Colors.amber.shade900,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -85,7 +100,9 @@ class NgoApprovalPendingScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               Text(
-                "Welcome ${user?.name ?? 'NGO Partner'}! Your NGO application has been submitted successfully.\n\nOur Admin team is reviewing your registration details and documents. You will receive access to the Rescue Control Room as soon as your account is approved.",
+                isApproved
+                    ? "Congratulations ${user?.name ?? 'NGO Partner'}! Your NGO application has been approved by our Admin team. You can now access the NGO Dashboard and accept food rescue requests."
+                    : "Welcome ${user?.name ?? 'NGO Partner'}! Your NGO application has been submitted successfully.\n\nOur Admin team is reviewing your registration details and documents. You will receive access to the Rescue Control Room as soon as your account is approved.",
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 13,
@@ -96,55 +113,52 @@ class NgoApprovalPendingScreen extends StatelessWidget {
 
               const SizedBox(height: 36),
 
-              // Check Live Approval Status Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final approved = await authVm.refreshApprovalStatus();
-                    if (!context.mounted) return;
-                    if (approved) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Account Approved! Welcome to Rescue Control.")),
-                      );
+              if (isApproved) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
                       Navigator.pushReplacementNamed(context, '/ngo-dashboard');
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Application is still under admin review. Please try again shortly.")),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text("CHECK APPROVAL STATUS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    },
+                    icon: const Icon(Icons.dashboard_rounded, size: 18),
+                    label: const Text("CONTINUE TO NGO DASHBOARD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Demo / Admin Simulation Button for instant testing
-              OutlinedButton.icon(
-                onPressed: () {
-                  authVm.simulateNgoAdminApproval();
-                  Navigator.pushReplacementNamed(context, '/ngo-dashboard');
-                },
-                icon: const Icon(Icons.verified_user_rounded, size: 18),
-                label: const Text(
-                  "SIMULATE ADMIN APPROVAL (DEMO TEST)",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final approved = await authVm.refreshApprovalStatus();
+                      if (!context.mounted) return;
+                      if (approved) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Account Approved! Welcome to Rescue Control.")),
+                        );
+                        Navigator.pushReplacementNamed(context, '/ngo-dashboard');
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Application is still under admin review. Please try again shortly.")),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text("CHECK APPROVAL STATUS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
                 ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary, width: 1.5),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-              ),
+              ],
 
               const SizedBox(height: 16),
 

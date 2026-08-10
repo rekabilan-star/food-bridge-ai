@@ -20,8 +20,12 @@ class ApiService {
     
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _secureStorage.read(key: AppConstants.tokenKey);
-        if (token != null) {
+        String? token = await _secureStorage.read(key: AppConstants.tokenKey);
+        if (token == null || token.isEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          token = prefs.getString(AppConstants.tokenKey);
+        }
+        if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
         return handler.next(options);

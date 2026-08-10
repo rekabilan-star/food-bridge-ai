@@ -100,8 +100,8 @@ exports.getUsers = async (req, res, next) => {
         const { role, status, search, page = 1, limit = 10 } = req.query;
         const query = { role: { $ne: 'admin' } };
 
-        if (role) query.role = role;
-        if (status) query.status = status;
+        if (role) query.role = role.toLowerCase();
+        if (status) query.status = status.toLowerCase();
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },

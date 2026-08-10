@@ -32,8 +32,11 @@ class AuthRepository {
         await _secureStorage.write(key: AppConstants.tokenKey, value: data['token']);
         await _secureStorage.write(key: 'refresh_token', value: data['refreshToken']);
         
-        // Save non-sensitive data in SharedPreferences
+        // Save non-sensitive data & fallback token in SharedPreferences
         final prefs = await SharedPreferences.getInstance();
+        if (data['token'] != null) {
+          await prefs.setString(AppConstants.tokenKey, data['token']);
+        }
         await prefs.setString(AppConstants.roleKey, user.role.toString().split('.').last);
         await prefs.setString(AppConstants.userDataKey, json.encode(user.toJson()));
         
@@ -103,7 +106,17 @@ class AuthRepository {
         AppConstants.registerDonorUrl,
         data: data,
       );
-      return UserModel.fromJson(response.data['user']);
+      final resData = response.data;
+      final user = UserModel.fromJson(resData['user']);
+      if (resData['token'] != null) {
+        await _secureStorage.write(key: AppConstants.tokenKey, value: resData['token']);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.tokenKey, resData['token']);
+      }
+      if (resData['refreshToken'] != null) {
+        await _secureStorage.write(key: 'refresh_token', value: resData['refreshToken']);
+      }
+      return user;
     } on DioException catch (e) {
       throw e.error ?? "Registration Error";
     }
@@ -115,9 +128,33 @@ class AuthRepository {
         AppConstants.registerNgoUrl,
         data: data,
       );
-      return UserModel.fromJson(response.data['user']);
+      final resData = response.data;
+      final user = UserModel.fromJson(resData['user']);
+      if (resData['token'] != null) {
+        await _secureStorage.write(key: AppConstants.tokenKey, value: resData['token']);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.tokenKey, resData['token']);
+      }
+      if (resData['refreshToken'] != null) {
+        await _secureStorage.write(key: 'refresh_token', value: resData['refreshToken']);
+      }
+      return user;
     } on DioException catch (e) {
       throw e.error ?? "Registration Error";
+    }
+  }
+
+  Future<UserModel> getProfile() async {
+    try {
+      final response = await _apiService.dio.get('user/profile');
+      final user = UserModel.fromJson(response.data['data']);
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(AppConstants.userDataKey, json.encode(user.toJson()));
+      
+      return user;
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to fetch profile";
     }
   }
 

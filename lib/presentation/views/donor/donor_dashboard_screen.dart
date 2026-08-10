@@ -22,19 +22,21 @@ import '../chat/chat_list_screen.dart';
 import 'dart:async';
 
 class DonorDashboardScreen extends StatefulWidget {
-  const DonorDashboardScreen({super.key});
+  final int initialIndex;
+  const DonorDashboardScreen({super.key, this.initialIndex = 0});
 
   @override
   State<DonorDashboardScreen> createState() => _DonorDashboardScreenState();
 }
 
 class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
-  int _currentNavIndex = 0;
+  late int _currentNavIndex;
   Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _currentNavIndex = widget.initialIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshData();
       _autoRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {

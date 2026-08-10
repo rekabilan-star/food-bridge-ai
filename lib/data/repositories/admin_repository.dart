@@ -9,7 +9,32 @@ class AdminRepository {
   Future<Map<String, dynamic>> getDashboardStats() async {
     try {
       final response = await _apiService.dio.get('admin/dashboard');
-      return response.data['data'];
+      final rawData = response.data['data'];
+
+      if (rawData != null && rawData is Map<String, dynamic>) {
+        if (rawData.containsKey('counts') && rawData['counts'] != null) {
+          return Map<String, dynamic>.from(rawData);
+        }
+
+        return {
+          'counts': {
+            'totalDonors': rawData['totalDonors'] ?? 0,
+            'totalNGOs': rawData['totalNGOs'] ?? 0,
+            'pendingNGOs': rawData['pendingNGOApprovals'] ?? rawData['pendingNGOs'] ?? 0,
+            'completedDonations': rawData['completedDonations'] ?? 0,
+            'activeDonations': rawData['activeDonations'] ?? 0,
+          },
+          'impact': rawData['impact'] ?? {
+            'mealsServed': 0,
+            'co2Saved': 0,
+            'foodSavedKg': 0,
+            'membersServed': 0,
+          },
+          'charts': rawData['charts'] ?? {'dailyDonations': [], 'categories': []},
+          'recentActivity': rawData['recentActivity'] ?? [],
+        };
+      }
+      return {};
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch dashboard stats";
     }

@@ -166,8 +166,10 @@ class DonationDetailsScreen extends StatelessWidget {
               final success = await viewModel.updateDonationStatus(donation.id, 'accepted');
               if (success) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Donation Accepted!")));
-                Navigator.pop(context); // Go back to list
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Donation Accepted! Task added to your Rescue Control."))
+                );
+                Navigator.pushNamedAndRemoveUntil(context, '/ngo-dashboard', (route) => false);
               } else {
                  if (!context.mounted) return;
                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(viewModel.errorMessage ?? "Failed to accept")));
