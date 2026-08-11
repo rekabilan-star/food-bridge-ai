@@ -6,6 +6,8 @@ import '../../../data/models/user_model.dart';
 import '../../../core/theme/app_colors.dart';
 import 'widgets/primary_button.dart';
 import 'widgets/secondary_button.dart';
+import '../auth/donor_register_screen.dart';
+import '../auth/ngo_register_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -58,6 +60,150 @@ class _SplashScreenState extends State<SplashScreen> {
         });
       }
     }
+  }
+
+  void _showRoleSelectionBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Create an Account",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "Choose your role to get started with FoodBridge AI",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildRoleTile(
+                context,
+                title: "Register as Donor",
+                subtitle: "Donate surplus food from restaurant, event, or home",
+                icon: Icons.favorite_rounded,
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DonorRegisterScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildRoleTile(
+                context,
+                title: "Register as NGO Partner",
+                subtitle: "Rescue and distribute food to local communities",
+                icon: Icons.shield_rounded,
+                color: AppColors.ngoColor,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NgoRegisterScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRoleTile(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border, width: 1.5),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -198,7 +344,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   children: [
                     PrimaryButton(
                       text: "Get Started",
-                      onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                      onPressed: () => _showRoleSelectionBottomSheet(context),
                     ).animate().fadeIn(delay: 500.ms),
                     const SizedBox(height: 14),
                     SecondaryButton(

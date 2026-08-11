@@ -106,9 +106,9 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 10),
-                                  const Expanded(
+                                  Expanded(
                                     child: StatCard(
-                                      value: "128+",
+                                      value: "${donationViewModel.donations.fold<int>(0, (sum, d) => sum + d.membersServed)}",
                                       label: "Meals Shared",
                                       icon: Icons.restaurant_rounded,
                                       iconColor: AppColors.secondary,
@@ -117,7 +117,9 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: StatCard(
-                                      value: "4.9",
+                                      value: user?.averageRating != null && user!.averageRating > 0 
+                                          ? user.averageRating.toStringAsFixed(1) 
+                                          : "${donationViewModel.donations.where((d) => d.status == 'completed').length * 10}",
                                       label: "Impact Score",
                                       icon: Icons.star_rounded,
                                       iconColor: Colors.amber.shade700,

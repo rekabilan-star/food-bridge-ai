@@ -72,6 +72,7 @@ class DonationViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchDonorDonations({String? status, String? search}) async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       _donations = await _repository.getDonorDonations(status: status, search: search);
@@ -84,6 +85,7 @@ class DonationViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchAvailableDonations({String? search}) async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       final res = await _repository.getAvailableDonations(search: search);

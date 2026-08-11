@@ -71,6 +71,8 @@ class NotificationViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchNotifications({bool refresh = false}) async {
+    if (_isLoading || _isMoreLoading) return;
+
     if (refresh) {
       _currentPage = 1;
       _isLoading = true;

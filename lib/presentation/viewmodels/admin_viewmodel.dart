@@ -64,6 +64,7 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchDashboardStats() async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       _stats = await _repository.getDashboardStats();
@@ -76,6 +77,7 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchUsers({String? role, String? status, String? search, int page = 1}) async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getUsers(role: role, status: status, search: search, page: page);
@@ -91,6 +93,7 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchNgos({String? status, String? search, int page = 1}) async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getNgos(status: status, search: search, page: page);
@@ -106,6 +109,7 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchAllDonations({String? status, String? category, String? search, int page = 1}) async {
+    if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getAllDonations(status: status, category: category, search: search, page: page);
