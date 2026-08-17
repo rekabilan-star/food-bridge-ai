@@ -53,22 +53,33 @@ class _DonationAuditScreenState extends State<DonationAuditScreen> {
             IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _onSearch(page: _currentPage)),
         ],
       ),
-      body: Column(
-        children: [
-          _buildSearchAndFilters(),
-          Expanded(
-            child: viewModel.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : viewModel.donations.isEmpty
-                    ? _buildEmptyState()
-                    : Column(
-                        children: [
-                          Expanded(child: _buildDonationList(viewModel.donations)),
-                          _buildPaginationControls(viewModel),
-                        ],
-                      ),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _onSearch(page: _currentPage);
+        },
+        child: Column(
+          children: [
+            _buildSearchAndFilters(),
+            Expanded(
+              child: viewModel.isLoading && viewModel.donations.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : viewModel.donations.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.5,
+                            child: _buildEmptyState(),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            Expanded(child: _buildDonationList(viewModel.donations)),
+                            _buildPaginationControls(viewModel),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }

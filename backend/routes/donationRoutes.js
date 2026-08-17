@@ -62,6 +62,6 @@ router.post('/:id/confirm-delivery', authorize('ngo'), confirmDelivery);
 router
   .route('/:id')
   .put(authorize('donor'), updateDonation)
-  .delete(authorize('donor'), deleteDonation);
+  .delete(deleteDonation);
 
 module.exports = router;

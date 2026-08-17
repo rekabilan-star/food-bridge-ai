@@ -7,7 +7,14 @@ import 'qr_scanner_screen.dart';
 
 class NgoNavigationScreen extends StatefulWidget {
   final String donationId;
-  const NgoNavigationScreen({super.key, required this.donationId});
+  final double? destinationLat;
+  final double? destinationLng;
+  const NgoNavigationScreen({
+    super.key,
+    required this.donationId,
+    this.destinationLat,
+    this.destinationLng,
+  });
 
   @override
   State<NgoNavigationScreen> createState() => _NgoNavigationScreenState();
@@ -15,8 +22,17 @@ class NgoNavigationScreen extends StatefulWidget {
 
 class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
   final MapController _mapController = MapController();
-  final LatLng _destination = const LatLng(13.0475, 80.2520); // Demo destination
-  final LatLng _currentPos = const LatLng(13.0827, 80.2707); // Demo current pos
+  late final LatLng _destination;
+  final LatLng _currentPos = const LatLng(13.0827, 80.2707);
+
+  @override
+  void initState() {
+    super.initState();
+    _destination = LatLng(
+      widget.destinationLat ?? 13.0475,
+      widget.destinationLng ?? 80.2520,
+    );
+  }
 
   Future<void> _launchMaps() async {
     final url =

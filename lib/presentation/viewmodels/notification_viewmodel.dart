@@ -92,7 +92,7 @@ class NotificationViewModel extends ChangeNotifier {
         read: _readFilter,
       );
 
-      final List<NotificationModel> fetchedNotifications = result['notifications'];
+      final List<NotificationModel> fetchedNotifications = (result['notifications'] as List?)?.cast<NotificationModel>() ?? [];
       
       if (refresh) {
         _notifications = fetchedNotifications;
@@ -100,8 +100,11 @@ class NotificationViewModel extends ChangeNotifier {
         _notifications.addAll(fetchedNotifications);
       }
 
-      _unreadCount = result['unreadCount'];
-      _totalPages = result['pagination']['pages'];
+      _unreadCount = result['unreadCount'] ?? 0;
+      final pagination = result['pagination'];
+      _totalPages = (pagination != null && pagination['pages'] != null)
+          ? (pagination['pages'] as int)
+          : 1;
       _currentPage++;
       _errorMessage = null;
     } catch (e) {
@@ -123,25 +126,29 @@ class NotificationViewModel extends ChangeNotifier {
         await _repository.markAsRead(id);
       }
     } catch (e) {
-      debugPrint("Error marking read: $e");
+      _errorMessage = e.toString();
+      await fetchNotifications(refresh: true);
     }
   }
 
   Future<void> markAllAsRead() async {
     try {
+      await _repository.markAllRead();
       for (var n in _notifications) {
         n.isRead = true;
       }
       _unreadCount = 0;
+      _errorMessage = null;
       _safeNotify();
-      await _repository.markAllRead();
     } catch (e) {
-      debugPrint("Error marking all read: $e");
+      _errorMessage = e.toString();
+      await fetchNotifications(refresh: true);
     }
   }
 
   Future<void> deleteNotification(String id) async {
     try {
+      await _repository.deleteNotification(id);
       final index = _notifications.indexWhere((n) => n.id == id);
       if (index != -1) {
         final bool wasUnread = !_notifications[index].isRead;
@@ -149,22 +156,25 @@ class NotificationViewModel extends ChangeNotifier {
         if (wasUnread) {
           _unreadCount = (_unreadCount - 1).clamp(0, 1000000);
         }
-        _safeNotify();
-        await _repository.deleteNotification(id);
       }
+      _errorMessage = null;
+      _safeNotify();
     } catch (e) {
-      debugPrint("Error deleting notification: $e");
+      _errorMessage = e.toString();
+      await fetchNotifications(refresh: true);
     }
   }
 
   Future<void> deleteAll() async {
     try {
+      await _repository.deleteAllNotifications();
       _notifications.clear();
       _unreadCount = 0;
+      _errorMessage = null;
       _safeNotify();
-      await _repository.deleteAllNotifications();
     } catch (e) {
-      debugPrint("Error deleting all: $e");
+      _errorMessage = e.toString();
+      await fetchNotifications(refresh: true);
     }
   }
 

@@ -78,8 +78,7 @@ class DonationViewModel extends ChangeNotifier {
       _donations = await _repository.getDonorDonations(status: status, search: search);
       _errorMessage = null;
     } catch (e) {
-      _donations = [];
-      _errorMessage = null;
+      _errorMessage = e.toString();
     }
     _setLoading(false);
   }
@@ -88,78 +87,21 @@ class DonationViewModel extends ChangeNotifier {
     if (_isLoading) return;
     _setLoading(true);
     try {
-      final res = await _repository.getAvailableDonations(search: search);
-      if (res.isNotEmpty) {
-        _donations = res;
-      } else if (_donations.isEmpty) {
-        _donations = _getSampleAvailableDonations();
-      }
+      _donations = await _repository.getAvailableDonations(search: search);
       _errorMessage = null;
     } catch (e) {
-      if (_donations.isEmpty) {
-        _donations = _getSampleAvailableDonations();
-      }
-      _errorMessage = null;
+      _errorMessage = e.toString();
     }
     _setLoading(false);
-  }
-
-  List<DonationModel> _getSampleAvailableDonations() {
-    return [
-      DonationModel(
-        id: 'don_sample_01',
-        donorId: 'donor_01',
-        donorName: 'Grand Hyatt Catering',
-        donorPhone: '+91 9876543210',
-        foodName: 'Fresh Buffet Meals (50 Plates)',
-        category: 'Vegetarian',
-        membersServed: 50,
-        imageUrl: '',
-        preparedTime: DateTime.now().subtract(const Duration(hours: 1)),
-        bestBeforeTime: DateTime.now().add(const Duration(hours: 4)),
-        pickupAddress: 'Block 4, Peelamedu, Coimbatore, TN',
-        latitude: 11.0168,
-        longitude: 76.9558,
-        specialInstructions: 'Contact banquet manager upon arrival',
-        status: 'waiting',
-      ),
-      DonationModel(
-        id: 'don_sample_02',
-        donorId: 'donor_02',
-        donorName: 'Sri Krishna Sweets & Snacks',
-        donorPhone: '+91 9842154321',
-        foodName: 'Packaged Bakery Goods (30 Packs)',
-        category: 'Vegetarian',
-        membersServed: 30,
-        imageUrl: '',
-        preparedTime: DateTime.now().subtract(const Duration(hours: 2)),
-        bestBeforeTime: DateTime.now().add(const Duration(hours: 8)),
-        pickupAddress: 'Gandhipuram 10th Street, Coimbatore',
-        latitude: 11.0183,
-        longitude: 76.9644,
-        specialInstructions: 'Ready at dispatch counter',
-        status: 'waiting',
-      ),
-    ];
   }
 
   Future<void> fetchNgoAssignedDonations() async {
     _setLoading(true);
     try {
-      final remote = await _repository.getNgoAssignedDonations();
-      if (remote.isNotEmpty) {
-        for (var don in remote) {
-          int idx = _assignedDonations.indexWhere((d) => d.id == don.id);
-          if (idx != -1) {
-            _assignedDonations[idx] = don;
-          } else {
-            _assignedDonations.add(don);
-          }
-        }
-      }
+      _assignedDonations = await _repository.getNgoAssignedDonations();
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = null;
+      _errorMessage = e.toString();
     }
     _setLoading(false);
   }
@@ -265,71 +207,13 @@ class DonationViewModel extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
-      _updateLocalDonationStatus(id, status, description);
-      _errorMessage = null;
+      _errorMessage = e.toString();
       _setLoading(false);
-      return true;
+      return false;
     }
   }
 
-  void _updateLocalDonationStatus(String id, String status, String? description) {
-    int donIdx = _donations.indexWhere((d) => d.id == id);
-    DonationModel? target;
 
-    if (donIdx != -1) {
-      target = _donations[donIdx];
-    } else if (_currentDonation != null && _currentDonation!.id == id) {
-      target = _currentDonation;
-    } else {
-      target = DonationModel(
-        id: id,
-        donorId: 'donor_01',
-        donorName: 'Grand Hyatt Catering',
-        donorPhone: '+91 9876543210',
-        foodName: 'Fresh Buffet Meals (50 Plates)',
-        category: 'Vegetarian',
-        membersServed: 50,
-        imageUrl: '',
-        preparedTime: DateTime.now().subtract(const Duration(hours: 1)),
-        bestBeforeTime: DateTime.now().add(const Duration(hours: 4)),
-        pickupAddress: 'Block 4, Peelamedu, Coimbatore, TN',
-        latitude: 11.0168,
-        longitude: 76.9558,
-        specialInstructions: 'Contact banquet manager upon arrival',
-        status: status,
-      );
-    }
-
-    final newTimeline = List<TimelineModel>.from(target!.timeline);
-    newTimeline.add(TimelineModel(
-      status: status,
-      time: DateTime.now(),
-      description: description ?? 'Status updated to $status',
-    ));
-
-    final updatedDonation = target.copyWith(
-      status: status,
-      timeline: newTimeline,
-      assignedNgoId: target.assignedNgoId ?? 'ngo_current',
-      assignedNgoName: target.assignedNgoName ?? 'Asha Food Rescue',
-      assignedNgoPhone: target.assignedNgoPhone ?? '+91 9876543210',
-    );
-
-    if (donIdx != -1) {
-      _donations[donIdx] = updatedDonation;
-    } else {
-      _donations.insert(0, updatedDonation);
-    }
-    _currentDonation = updatedDonation;
-
-    int assignedIdx = _assignedDonations.indexWhere((d) => d.id == id);
-    if (assignedIdx != -1) {
-      _assignedDonations[assignedIdx] = updatedDonation;
-    } else {
-      _assignedDonations.insert(0, updatedDonation);
-    }
-    _safeNotify();
-  }
 
   Future<bool> cancelDonation(String id, String reason) async {
     _setLoading(true);

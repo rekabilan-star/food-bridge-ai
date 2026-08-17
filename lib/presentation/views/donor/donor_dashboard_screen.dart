@@ -5,7 +5,9 @@ import '../../viewmodels/donation_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/emergency_viewmodel.dart';
 import '../../viewmodels/notification_viewmodel.dart';
+import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/ui_utils.dart';
 import 'donate_food_screen.dart';
 import 'qr_display_screen.dart';
 import '../common/donation_tracking_screen.dart';
@@ -31,7 +33,6 @@ class DonorDashboardScreen extends StatefulWidget {
 
 class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
   late int _currentNavIndex;
-  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
@@ -39,23 +40,21 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     _currentNavIndex = widget.initialIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshData();
-      _autoRefreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-        if (mounted) _refreshData();
-      });
     });
   }
 
-  @override
-  void dispose() {
-    _autoRefreshTimer?.cancel();
-    super.dispose();
-  }
-
   Future<void> _refreshData() async {
-    context.read<DonationViewModel>().fetchDonorDonations();
-    context.read<EmergencyViewModel>().fetchActiveRequests();
-    context.read<NotificationViewModel>().initSocketListeners();
-    context.read<NotificationViewModel>().fetchNotifications(refresh: true);
+    if (!mounted) return;
+    final dVM = context.read<DonationViewModel>();
+    final eVM = context.read<EmergencyViewModel>();
+    final nVM = context.read<NotificationViewModel>();
+
+    nVM.initSocketListeners();
+    await Future.wait([
+      dVM.fetchDonorDonations(),
+      eVM.fetchActiveRequests(),
+      nVM.fetchNotifications(refresh: true),
+    ]);
   }
 
   @override
@@ -374,66 +373,303 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
             itemCount: viewModel.requests.length,
             itemBuilder: (context, index) {
               final request = viewModel.requests[index];
-              return Container(
-                width: 270,
-                margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.4), width: 1.2),
+              return GestureDetector(
+                onTap: () => _showEmergencyModal(context, request),
+                child: Container(
+                  width: 270,
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.warning.withValues(alpha: 0.4), width: 1.2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              request.title,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.warning.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              request.priority,
+                              style: const TextStyle(color: AppColors.warning, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        request.reason,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton(
+                          onPressed: () => _showEmergencyModal(context, request),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(80, 32),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text("HELP NOW", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showEmergencyModal(BuildContext context, EmergencyRequestModel request) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(bottomSheetContext).padding.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.flash_on_rounded, color: AppColors.warning, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            request.title,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        const Text(
+                          "URGENT RESCUE ALERT",
+                          style: TextStyle(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11,
+                            letterSpacing: 1.0,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            request.priority,
-                            style: const TextStyle(color: AppColors.warning, fontSize: 9, fontWeight: FontWeight.bold),
+                        Text(
+                          request.ngoName ?? "Emergency Relief Team",
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      request.reason,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(80, 32),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        child: const Text("HELP NOW", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                    child: Text(
+                      request.priority,
+                      style: const TextStyle(
+                        color: AppColors.warning,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                request.title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                request.reason,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    _buildModalDetailRow(Icons.restaurant_rounded, "Food Type", request.foodType.isNotEmpty ? request.foodType : "Cooked Meals"),
+                    const Divider(height: 16),
+                    _buildModalDetailRow(Icons.groups_rounded, "Meals Needed", "${request.requiredMembers} Servings"),
+                    const Divider(height: 16),
+                    _buildModalDetailRow(Icons.location_on_rounded, "Delivery Location", request.address),
                   ],
                 ),
-              );
-            },
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(bottomSheetContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DonateFoodScreen(emergencyRequest: request),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.volunteer_activism_rounded, color: Colors.white),
+                  label: const Text(
+                    "DONATE FOOD FOR THIS RESCUE",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(bottomSheetContext);
+                    UIUtils.showLoadingDialog(context);
+                    final success = await context.read<EmergencyViewModel>().fulfillRequest(request.id);
+                    if (context.mounted) {
+                      Navigator.pop(context); // pop loading dialog
+                      if (success) {
+                        UIUtils.showSuccessDialog(
+                          context,
+                          "Thank you! Your emergency pledge has been recorded. The emergency team has been notified.",
+                          onOk: () => _refreshData(),
+                        );
+                      } else {
+                        UIUtils.showErrorDialog(
+                          context,
+                          context.read<EmergencyViewModel>().errorMessage ?? "Failed to register response. Please try again.",
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary),
+                  label: const Text(
+                    "PLEDGE IMMEDIATE SUPPORT",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.primary, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModalDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const Spacer(),
+        Expanded(
+          flex: 2,
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

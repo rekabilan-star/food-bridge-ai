@@ -71,7 +71,6 @@ class AdminViewModel extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
-      _stats = {};
     }
     _setLoading(false);
   }

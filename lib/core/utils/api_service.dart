@@ -32,36 +32,56 @@ class ApiService {
       },
       onResponse: (response, handler) => handler.next(response),
       onError: (DioException e, handler) async {
-        if (e.response?.statusCode == 401 && !e.requestOptions.path.contains('auth/login')) {
-          // Token expired, attempt refresh
+        final path = e.requestOptions.path;
+        final isAuthEndpoint = path.contains('auth/login') ||
+            path.contains('auth/register') ||
+            path.contains('auth/refresh-token') ||
+            path.contains('auth/forgot-password') ||
+            path.contains('auth/reset-password');
+
+        if (e.response?.statusCode == 401 && !isAuthEndpoint) {
           final refreshToken = await _secureStorage.read(key: 'refresh_token');
-          
-          if (refreshToken != null) {
+
+          if (refreshToken != null && refreshToken.isNotEmpty) {
             try {
-              final response = await Dio().post(
-                '${AppConstants.baseUrl}auth/refresh-token',
-                data: {'refreshToken': refreshToken}
+              final refreshDio = Dio(BaseOptions(
+                baseUrl: AppConstants.baseUrl,
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 15),
+              ));
+
+              final response = await refreshDio.post(
+                'auth/refresh-token',
+                data: {'refreshToken': refreshToken},
               );
-              
-              if (response.statusCode == 200) {
+
+              if (response.statusCode == 200 && response.data != null && response.data['success'] == true) {
                 final newToken = response.data['token'];
                 final newRefreshToken = response.data['refreshToken'];
-                
-                await _secureStorage.write(key: AppConstants.tokenKey, value: newToken);
-                await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
-                
-                // Retry the original request
+
+                if (newToken != null) {
+                  await _secureStorage.write(key: AppConstants.tokenKey, value: newToken);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString(AppConstants.tokenKey, newToken);
+                }
+
+                if (newRefreshToken != null) {
+                  await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
+                }
+
+                // Retry original request with new access token
                 final opts = e.requestOptions;
                 opts.headers['Authorization'] = 'Bearer $newToken';
-                
+
                 final retryRes = await dio.fetch(opts);
                 return handler.resolve(retryRes);
               }
             } catch (refreshErr) {
-              // Refresh failed, logout user
-              await _secureStorage.deleteAll();
+              // Refresh failed, clear invalidated token fields
+              await _secureStorage.delete(key: AppConstants.tokenKey);
+              await _secureStorage.delete(key: 'refresh_token');
               final prefs = await SharedPreferences.getInstance();
-              await prefs.remove(AppConstants.userDataKey);
+              await prefs.remove(AppConstants.tokenKey);
             }
           }
         }

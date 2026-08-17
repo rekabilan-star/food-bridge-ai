@@ -1,10 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../viewmodels/chat_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../data/models/chat_model.dart';
 import '../../../data/models/message_model.dart';
+import '../../../data/repositories/donation_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 
@@ -62,6 +67,134 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     });
   }
 
+  Future<void> _handleAttachPhotos() async {
+    Navigator.pop(context);
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      if (picked != null) {
+        _sendMediaMessage(File(picked.path), MessageType.image);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick photo: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleAttachCamera() async {
+    Navigator.pop(context);
+    try {
+      final status = await Permission.camera.request();
+      if (status.isDenied || status.isPermanentlyDenied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Camera permission is required to capture photos')),
+          );
+        }
+        return;
+      }
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+      if (picked != null) {
+        _sendMediaMessage(File(picked.path), MessageType.image);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to take photo: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleAttachLocation() async {
+    Navigator.pop(context);
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required to share current location')),
+          );
+        }
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      final currentUserId = context.read<AuthViewModel>().user!.id;
+      final otherUser = widget.chat.getOtherParticipant(currentUserId);
+      final locationUrl = 'https://maps.google.com/?q=${position.latitude},${position.longitude}';
+      
+      context.read<ChatViewModel>().sendMessage(
+        chatId: widget.chat.id,
+        receiverId: otherUser.id,
+        text: '📍 Shared Location: $locationUrl',
+        type: MessageType.location,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to obtain location: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleAttachFile() async {
+    Navigator.pop(context);
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickMedia();
+      if (picked != null) {
+        _sendMediaMessage(File(picked.path), MessageType.pdf);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to select file: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendMediaMessage(File file, MessageType type) async {
+    final currentUserId = context.read<AuthViewModel>().user!.id;
+    final otherUser = widget.chat.getOtherParticipant(currentUserId);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Uploading attachment...'), duration: Duration(seconds: 2)),
+      );
+    }
+    
+    try {
+      final repo = DonationRepository();
+      final uploadedUrl = await repo.uploadImage(file);
+      
+      if (!mounted) return;
+      context.read<ChatViewModel>().sendMessage(
+        chatId: widget.chat.id,
+        receiverId: otherUser.id,
+        text: type == MessageType.image ? 'Shared an image' : 'Shared an attachment',
+        type: type,
+        fileUrl: uploadedUrl,
+        fileName: file.path.split('/').last,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload file: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = context.watch<AuthViewModel>().user!.id;
@@ -100,8 +233,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                backgroundImage: otherUser.profileImage != null ? NetworkImage(otherUser.profileImage!) : null,
-                child: otherUser.profileImage == null ? Text(otherUser.name[0], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)) : null,
+                child: (otherUser.profileImage == null || otherUser.profileImage!.isEmpty)
+                    ? Text(otherUser.name.isNotEmpty ? otherUser.name[0].toUpperCase() : 'U', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary))
+                    : null,
               ),
               if (isOnline)
                 Positioned(
@@ -126,8 +260,22 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ],
       ),
       actions: [
-        IconButton(icon: const Icon(Icons.call_rounded, size: 22), onPressed: () {}),
-        IconButton(icon: const Icon(Icons.videocam_rounded, size: 24), onPressed: () {}),
+        IconButton(
+          icon: const Icon(Icons.call_rounded, size: 22),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Direct audio calling feature initialising...')),
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.videocam_rounded, size: 24),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Direct video calling feature initialising...')),
+            );
+          },
+        ),
         const SizedBox(width: 8),
       ],
     );
@@ -139,7 +287,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(Icons.chat_bubble_outline_rounded, size: 40, color: Colors.grey[300])),
+              Container(padding: const EdgeInsets.all(20), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: Icon(Icons.chat_bubble_outline_rounded, size: 40, color: Colors.grey[300])),
               const SizedBox(height: 16),
               const Text("Securely connected", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
             ],
@@ -201,7 +349,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 28),
+            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 28),
             onPressed: _showAttachOptions,
           ),
           Expanded(
@@ -246,10 +394,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           spacing: 32, runSpacing: 32,
           alignment: WrapAlignment.center,
           children: [
-            _AttachItem(icon: Icons.image_rounded, label: 'Photos', color: Colors.blue, onTap: () {}),
-            _AttachItem(icon: Icons.camera_alt_rounded, label: 'Camera', color: Colors.orange, onTap: () {}),
-            _AttachItem(icon: Icons.location_on_rounded, label: 'Location', color: Colors.green, onTap: () {}),
-            _AttachItem(icon: Icons.description_rounded, label: 'File', color: Colors.purple, onTap: () {}),
+            _AttachItem(icon: Icons.image_rounded, label: 'Photos', color: Colors.blue, onTap: _handleAttachPhotos),
+            _AttachItem(icon: Icons.camera_alt_rounded, label: 'Camera', color: Colors.orange, onTap: _handleAttachCamera),
+            _AttachItem(icon: Icons.location_on_rounded, label: 'Location', color: Colors.green, onTap: _handleAttachLocation),
+            _AttachItem(icon: Icons.description_rounded, label: 'File', color: Colors.purple, onTap: _handleAttachFile),
           ],
         ),
       ),
@@ -285,6 +433,24 @@ class _MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            if (message.fileUrl != null && message.fileUrl!.isNotEmpty && message.messageType == MessageType.image)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    message.fileUrl!,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 100,
+                      color: Colors.grey[200],
+                      child: const Center(child: Icon(Icons.broken_image, size: 36, color: Colors.grey)),
+                    ),
+                  ),
+                ),
+              ),
             Text(
               message.text ?? '',
               style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 15, height: 1.4),
@@ -324,16 +490,21 @@ class _AttachItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: Icon(icon, color: color, size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
-      ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54)),
+        ],
+      ),
     );
   }
 }

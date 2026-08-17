@@ -48,31 +48,43 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          _buildAiBanner(),
-          Expanded(
-            child: Consumer<DonationViewModel>(
-              builder: (context, viewModel, _) {
-                if (viewModel.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                
-                if (viewModel.donations.isEmpty) {
-                  return const Center(child: Text("No donations available at the moment."));
-                }
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await context.read<DonationViewModel>().fetchAvailableDonations(search: _searchController.text.trim());
+        },
+        child: Column(
+          children: [
+            _buildAiBanner(),
+            Expanded(
+              child: Consumer<DonationViewModel>(
+                builder: (context, viewModel, _) {
+                  if (viewModel.isLoading && viewModel.donations.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  
+                  if (viewModel.donations.isEmpty) {
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: const Center(child: Text("No donations available at the moment.")),
+                      ),
+                    );
+                  }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: viewModel.donations.length,
-                  itemBuilder: (context, index) {
-                    return _buildRequestCard(viewModel.donations[index]);
-                  },
-                );
-              },
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    padding: const EdgeInsets.all(20),
+                    itemCount: viewModel.donations.length,
+                    itemBuilder: (context, index) {
+                      return _buildRequestCard(viewModel.donations[index]);
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

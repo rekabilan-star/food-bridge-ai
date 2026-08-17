@@ -10,9 +10,15 @@ class TimelineModel {
   });
 
   factory TimelineModel.fromJson(Map<String, dynamic> json) {
+    DateTime parsedTime;
+    try {
+      parsedTime = json['time'] != null ? DateTime.parse(json['time'].toString()) : DateTime.now();
+    } catch (_) {
+      parsedTime = DateTime.now();
+    }
     return TimelineModel(
       status: json['status'] ?? '',
-      time: json['time'] != null ? DateTime.parse(json['time']) : DateTime.now(),
+      time: parsedTime,
       description: json['description'] ?? '',
     );
   }
@@ -106,6 +112,12 @@ class DeliveryDetailsModel {
   });
 
   factory DeliveryDetailsModel.fromJson(Map<String, dynamic> json) {
+    DateTime? parsedCompletedAt;
+    try {
+      parsedCompletedAt = json['completedAt'] != null ? DateTime.parse(json['completedAt'].toString()) : null;
+    } catch (_) {
+      parsedCompletedAt = null;
+    }
     return DeliveryDetailsModel(
       photoUrl: json['photoUrl'],
       address: json['location']?['address'],
@@ -113,7 +125,7 @@ class DeliveryDetailsModel {
       longitude: json['location']?['longitude']?.toDouble(),
       membersServed: json['membersServed'],
       notes: json['notes'],
-      completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt']) : null,
+      completedAt: parsedCompletedAt,
     );
   }
 }

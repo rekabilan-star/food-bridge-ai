@@ -28,13 +28,18 @@ class NotificationRepository {
         },
       );
       
-      final List data = response.data['notifications'];
+      final List data = response.data['notifications'] ?? [];
       final notifications = data.map((json) => NotificationModel.fromJson(json)).toList();
       
       return {
         'notifications': notifications,
-        'unreadCount': response.data['unreadCount'],
-        'pagination': response.data['pagination'],
+        'unreadCount': response.data['unreadCount'] ?? 0,
+        'pagination': response.data['pagination'] ?? {
+          'page': page,
+          'limit': limit,
+          'total': notifications.length,
+          'pages': 1,
+        },
       };
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch notifications";

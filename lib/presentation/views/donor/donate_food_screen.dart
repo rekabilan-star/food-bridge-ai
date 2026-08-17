@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
+import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_utils.dart';
 import 'donor_dashboard_screen.dart';
@@ -18,7 +19,8 @@ import '../common/widgets/custom_app_bar.dart';
 
 class DonateFoodScreen extends StatefulWidget {
   final DonationModel? donation;
-  const DonateFoodScreen({super.key, this.donation});
+  final EmergencyRequestModel? emergencyRequest;
+  const DonateFoodScreen({super.key, this.donation, this.emergencyRequest});
 
   @override
   State<DonateFoodScreen> createState() => _DonateFoodScreenState();
@@ -68,6 +70,28 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
           timestamp: DateTime.now(),
         ));
       });
+    } else if (widget.emergencyRequest != null) {
+      final req = widget.emergencyRequest!;
+      _foodType = req.foodType.isNotEmpty ? req.foodType : 'Cooked Meal';
+      _quantityController.text = req.requiredMembers > 0 ? req.requiredMembers.toString() : '10';
+      _addressController.text = req.address;
+      _instructionController.text = 'Emergency Rescue Donation for: ${req.title}';
+      _items.add(FoodItem(
+        foodName: req.foodType.isNotEmpty ? req.foodType : 'Emergency Food Relief',
+        category: 'Vegetarian',
+        membersServed: req.requiredMembers > 0 ? req.requiredMembers : 10,
+      ));
+      if (req.latitude != 0 && req.longitude != 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.read<LocationProviderV2>().setManualLocation(LocationModel(
+            latitude: req.latitude,
+            longitude: req.longitude,
+            accuracy: 0.0,
+            fullAddress: req.address,
+            timestamp: DateTime.now(),
+          ));
+        });
+      }
     } else {
       _items.add(FoodItem(
         foodName: "Cooked Meals",
@@ -85,10 +109,96 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
-    if (pickedFile != null) setState(() => _image = File(pickedFile.path));
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: source, imageQuality: 60);
+      if (pickedFile != null) {
+        setState(() => _image = File(pickedFile.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        UIUtils.showErrorDialog(context, "Could not open camera or gallery: $e");
+      }
+    }
+  }
+
+  void _showImageSourceDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Upload Food Photo",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "Take a real-time photo of the food or choose from gallery",
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                ),
+                title: const Text("Take Photo (Camera)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text("Capture live photo using device camera", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.secondary),
+                ),
+                title: const Text("Choose from Gallery", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text("Select existing photo from gallery", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openLocationPicker() async {
@@ -832,7 +942,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
 
   Widget _buildPhotoUploadCard() {
     return GestureDetector(
-      onTap: _pickImage,
+      onTap: () => _showImageSourceDialog(context),
       child: Container(
         height: 140,
         width: double.infinity,
@@ -861,7 +971,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    "Add food image",
+                    "Add food image (Camera / Gallery)",
                     style: TextStyle(
                       color: AppColors.primary,
                       fontSize: 13,
@@ -870,9 +980,27 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   ),
                 ],
               )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.file(_image!, fit: BoxFit.cover),
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.file(_image!, fit: BoxFit.cover),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
               ),
       ),
     );

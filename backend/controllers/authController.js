@@ -135,14 +135,24 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     token,
     refreshToken,
     user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phoneNumber: user.phoneNumber,
-        address: user.address,
-        status: user.status,
-        lastLogin: user.lastLogin
+      id: user._id,
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      phoneNumber: user.phoneNumber,
+      address: user.address,
+      latitude: user.latitude,
+      longitude: user.longitude,
+      profileImage: user.profileImage,
+      status: user.status,
+      availabilityStatus: user.availabilityStatus || 'Available',
+      averageRating: user.averageRating || 0,
+      totalRatings: user.totalRatings || 0,
+      lastLogin: user.lastLogin,
+      ngoRegistrationNumber: user.ngoRegistrationNumber,
+      ngoCertificateUrl: user.ngoCertificateUrl,
+      ngoIdProofUrl: user.ngoIdProofUrl
     }
   });
 };
@@ -169,7 +179,15 @@ exports.refreshToken = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Refresh token is required' });
     }
 
-    const user = await User.findOne({ refreshToken });
+    const jwt = require('jsonwebtoken');
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    } catch (jwtErr) {
+      return res.status(401).json({ success: false, message: 'Expired or invalid refresh token' });
+    }
+
+    const user = await User.findOne({ _id: decoded.id, refreshToken });
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }

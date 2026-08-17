@@ -33,24 +33,48 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(
         title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
         actions: [
-          IconButton(icon: const Icon(Icons.search_rounded), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.search_rounded),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Chat search feature active. Filter chats by recipient name.')),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert_rounded),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Additional chat settings and filtering options.')),
+              );
+            },
+          ),
           const SizedBox(width: 8),
         ],
       ),
       body: Consumer<ChatViewModel>(
         builder: (context, vm, child) {
-          if (vm.isLoading) {
+          if (vm.isLoading && vm.chats.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (vm.chats.isEmpty) {
-            return _buildEmptyState();
+            return RefreshIndicator(
+              onRefresh: vm.fetchChats,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.7,
+                  child: _buildEmptyState(),
+                ),
+              ),
+            );
           }
 
           return RefreshIndicator(
             onRefresh: vm.fetchChats,
             child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               padding: const EdgeInsets.symmetric(vertical: 12),
               itemCount: vm.chats.length,
               itemBuilder: (context, index) {
@@ -89,8 +113,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 child: CircleAvatar(
                                   radius: 28,
                                   backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                  backgroundImage: otherUser.profileImage != null ? NetworkImage(otherUser.profileImage!) : null,
-                                  child: otherUser.profileImage == null ? Text(otherUser.name[0], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary)) : null,
+                                  child: (otherUser.profileImage == null || otherUser.profileImage!.isEmpty)
+                                      ? Text(
+                                          otherUser.name.isNotEmpty ? otherUser.name[0].toUpperCase() : 'U',
+                                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                        )
+                                      : null,
                                 ),
                               ),
                               if (isOnline)

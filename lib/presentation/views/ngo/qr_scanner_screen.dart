@@ -20,22 +20,21 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     setState(() => _isScanned = true);
 
     final donationVM = context.read<DonationViewModel>();
-    final success = await donationVM.updateDonationStatus(
+    final success = await donationVM.verifyPickup(
       widget.donationId, 
-      'in_progress', 
-      description: 'Handshake verified via live QR scan.',
+      qrPayload,
     );
 
     if (!mounted) return;
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("QR Handshake Verified! Status updated to Driver En Route.")),
+        const SnackBar(content: Text("QR Handshake Verified! Status updated to Picked Up.")),
       );
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(donationVM.errorMessage ?? "Verification Failed")),
+        SnackBar(content: Text(donationVM.errorMessage ?? "Invalid QR Code or verification failed")),
       );
       setState(() => _isScanned = false);
     }
@@ -60,7 +59,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             onDetect: (capture) {
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
-                if (barcode.rawValue != null) {
+                if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
                   _handleQrVerification(barcode.rawValue!);
                   break;
                 }
@@ -77,33 +76,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               ),
             ),
           ),
-          Positioned(
+          const Positioned(
             bottom: 40,
             left: 20,
             right: 20,
-            child: Column(
-              children: [
-                const Text(
-                  "Align the Donor's QR code within the frame",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _isScanned ? null : () => _handleQrVerification("FOODBRIDGE_QR_${widget.donationId}"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.ngoColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    icon: const Icon(Icons.qr_code_scanner_rounded),
-                    label: const Text("SIMULATE LIVE QR SCAN (TEST)", style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
+            child: Text(
+              "Align the Donor's QR code within the frame",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
         ],

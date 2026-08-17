@@ -349,7 +349,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     const SizedBox(height: 14),
                     SecondaryButton(
                       text: "I already have an account",
-                      onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                      onPressed: () => Navigator.pushNamed(context, '/login'),
                     ).animate().fadeIn(delay: 600.ms),
                   ],
                 ),

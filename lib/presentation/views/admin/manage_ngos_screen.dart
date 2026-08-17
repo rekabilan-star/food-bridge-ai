@@ -47,31 +47,43 @@ class _ManageNgosScreenState extends State<ManageNgosScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          _buildSearchHeader(),
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ngos.isEmpty
-                    ? _buildEmptyState()
-                    : Column(
-                        children: [
-                          Expanded(
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: ngos.length,
-                              itemBuilder: (context, index) {
-                                final ngo = ngos[index];
-                                return _buildNgoCard(ngo).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05, end: 0);
-                              },
-                            ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _onSearch(page: _currentPage);
+        },
+        child: Column(
+          children: [
+            _buildSearchHeader(),
+            Expanded(
+              child: isLoading && ngos.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : ngos.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.5,
+                            child: _buildEmptyState(),
                           ),
-                          _buildPaginationControls(viewModel),
-                        ],
-                      ),
-          ),
-        ],
+                        )
+                      : Column(
+                          children: [
+                            Expanded(
+                              child: ListView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                                padding: const EdgeInsets.all(16),
+                                itemCount: ngos.length,
+                                itemBuilder: (context, index) {
+                                  final ngo = ngos[index];
+                                  return _buildNgoCard(ngo).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.05, end: 0);
+                                },
+                              ),
+                            ),
+                            _buildPaginationControls(viewModel),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }

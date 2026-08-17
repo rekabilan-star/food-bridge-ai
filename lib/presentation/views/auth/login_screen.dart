@@ -7,11 +7,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_utils.dart';
 import '../../../core/services/security_service.dart';
 import '../../../data/models/user_model.dart';
-import 'donor_register_screen.dart';
-import 'ngo_register_screen.dart';
 import 'ngo_approval_pending_screen.dart';
 import 'forgot_password_screen.dart';
+import 'donor_register_screen.dart';
+import 'ngo_register_screen.dart';
 import '../common/widgets/primary_button.dart';
+import '../common/widgets/custom_app_bar.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -126,12 +127,125 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _showRoleSelectionBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Create an Account",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "Choose your role to get started with FoodBridge AI",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ListTile(
+                contentPadding: const EdgeInsets.all(12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.favorite_rounded, color: AppColors.primary),
+                ),
+                title: const Text("Register as Donor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                subtitle: const Text("Donate surplus food from restaurant, event, or home", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DonorRegisterScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: const EdgeInsets.all(12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: AppColors.border),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.ngoColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shield_rounded, color: AppColors.ngoColor),
+                ),
+                title: const Text("Register as NGO Partner", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                subtitle: const Text("Rescue and distribute food to local communities", style: TextStyle(fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NgoRegisterScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authViewModel = context.watch<AuthViewModel>();
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: CustomAppBar(
+        title: "Sign In",
+        onBackPressed: () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            Navigator.pushReplacementNamed(context, '/splash');
+          }
+        },
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
@@ -347,107 +461,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: _loginWithEmail,
                 ),
 
-                const SizedBox(height: 36),
+                const SizedBox(height: 20),
 
-                // Divider Or Signup
-                const Row(
-                  children: [
-                    Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        "NEW TO FOODBRIDGE?",
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.grey, letterSpacing: 1),
-                      ),
-                    ),
-                    Expanded(child: Divider(color: AppColors.border)),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Registration Cards Options
+                // Register Link Row
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: _buildRegisterOptionCard(
-                        context,
-                        title: "Register as Donor",
-                        subtitle: "Individual or Restaurant",
-                        icon: Icons.favorite_rounded,
-                        color: AppColors.primary,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const DonorRegisterScreen()),
-                          );
-                        },
-                      ),
+                    const Text(
+                      "Don't have an account? ",
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildRegisterOptionCard(
-                        context,
-                        title: "Register as NGO",
-                        subtitle: "Shelter or Relief Org",
-                        icon: Icons.shield_rounded,
-                        color: AppColors.ngoColor,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const NgoRegisterScreen()),
-                          );
-                        },
+                    GestureDetector(
+                      onTap: () => _showRoleSelectionBottomSheet(context),
+                      child: const Text(
+                        "Sign Up",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 30),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRegisterOptionCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-            child: Column(
-              children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
-                  textAlign: TextAlign.center,
-                ),
               ],
             ),
           ),

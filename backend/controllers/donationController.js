@@ -152,9 +152,9 @@ exports.deleteDonation = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Donation not found' });
     }
 
-    // Make sure user is donation owner
+    // Make sure user is donation owner or admin
     if (donation.donorId.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(401).json({ success: false, message: 'Not authorized to delete this donation' });
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this donation' });
     }
 
     // Only allow delete if status is 'waiting'
@@ -164,7 +164,7 @@ exports.deleteDonation = async (req, res, next) => {
 
     await donation.deleteOne();
 
-    res.status(200).json({ success: true, data: {} });
+    res.status(200).json({ success: true, message: 'Donation deleted successfully', data: {} });
   } catch (err) {
     next(err);
   }
@@ -259,13 +259,18 @@ exports.updateDonationStatus = async (req, res, next) => {
     // Refresh donation with donor details for notification
     donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber');
 
-    // Notify Donor via Socket.IO for real-time tracking
+    // Notify via Socket.IO for real-time tracking (both to donor room and broadcast)
     if (global.io) {
-      global.io.to(donation.donorId._id.toString()).emit('donation_status_update', {
-        donationId: donation._id,
+      const socketPayload = {
+        donationId: donation._id.toString(),
         status: donation.status,
-        timeline: donation.timeline
-      });
+        timeline: donation.timeline,
+        donation
+      };
+      if (donation.donorId && donation.donorId._id) {
+        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
+      }
+      global.io.emit('donation_status_update', socketPayload);
     }
 
     // Professional Titles and Icons for different statuses
@@ -342,17 +347,22 @@ exports.cancelDonation = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to cancel this donation' });
     }
 
+    // Only allow cancellation if donation is not already completed, cancelled, or rejected
+    if (['completed', 'cancelled', 'rejected'].includes(donation.status)) {
+      return res.status(400).json({ success: false, message: `Cannot cancel donation in '${donation.status}' status` });
+    }
+
     const status = req.user.role === 'donor' ? 'cancelled' : 'rejected';
 
     donation.status = status;
     donation.cancellation = {
       cancelledBy: req.user.id,
-      reason,
+      reason: reason || 'Cancelled by user',
       time: Date.now()
     };
     donation.timeline.push({
       status,
-      description: `Donation ${status} by ${req.user.role}: ${reason}`,
+      description: `Donation ${status} by ${req.user.role}: ${reason || 'No reason provided'}`,
       time: Date.now(),
     });
 
@@ -360,6 +370,20 @@ exports.cancelDonation = async (req, res, next) => {
 
     // Refresh for populating details
     donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber').populate('assignedNgoId', 'name phoneNumber');
+
+    // Notify via Socket.IO for real-time tracking
+    if (global.io) {
+      const socketPayload = {
+        donationId: donation._id.toString(),
+        status: donation.status,
+        timeline: donation.timeline,
+        donation
+      };
+      if (donation.donorId && donation.donorId._id) {
+        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
+      }
+      global.io.emit('donation_status_update', socketPayload);
+    }
 
     // Trigger: Donation Cancelled/Rejected
     const targetUser = req.user.role === 'donor' ? donation.assignedNgoId : donation.donorId;
@@ -472,18 +496,30 @@ exports.updateLocation = async (req, res, next) => {
 exports.verifyPickup = async (req, res, next) => {
   try {
     const { qrCode } = req.body;
-    const donation = await Donation.findById(req.params.id).populate('donorId', 'name phoneNumber');
+    let donation = await Donation.findById(req.params.id).populate('donorId', 'name phoneNumber');
 
     if (!donation) {
       return res.status(404).json({ success: false, message: 'Donation not found' });
     }
 
-    if (donation.qrCode !== qrCode) {
-      return res.status(400).json({ success: false, message: 'Invalid QR Code' });
+    // Authorization: Only assigned NGO, volunteer, or admin can verify pickup
+    const isAssignedNgo = donation.assignedNgoId && donation.assignedNgoId.toString() === req.user.id;
+    const isVolunteer = donation.volunteerId && donation.volunteerId.toString() === req.user.id;
+
+    if (!isAssignedNgo && !isVolunteer && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to verify pickup for this donation' });
     }
 
-    if (donation.status === 'picked_up') {
-        return res.status(400).json({ success: false, message: 'Already picked up' });
+    if (donation.status === 'picked_up' || donation.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Donation has already been picked up or completed' });
+    }
+
+    if (donation.status === 'waiting') {
+      return res.status(400).json({ success: false, message: 'Donation must be accepted before pickup verification' });
+    }
+
+    if (!qrCode || donation.qrCode !== qrCode) {
+      return res.status(400).json({ success: false, message: 'Invalid QR Code' });
     }
 
     donation.status = 'picked_up';
@@ -495,22 +531,36 @@ exports.verifyPickup = async (req, res, next) => {
 
     await donation.save();
 
+    // Broadcast Socket.IO update AFTER successful DB save
+    if (global.io) {
+      const socketPayload = {
+        donationId: donation._id.toString(),
+        status: donation.status,
+        timeline: donation.timeline,
+        donation
+      };
+      if (donation.donorId && donation.donorId._id) {
+        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
+      }
+      global.io.emit('donation_status_update', socketPayload);
+    }
+
     // Trigger: Pickup Completed - Notify Donor
     notify({
-        userId: donation.donorId._id,
-        title: 'Food Picked Up Successfully 🥗',
-        body: `Your donation for ${donation.foodName} has been picked up. Thank you for your contribution!`,
-        category: 'DONATION',
-        priority: 'medium',
-        data: { donationId: donation._id.toString() }
-      });
+      userId: donation.donorId._id,
+      title: 'Food Picked Up Successfully 🥗',
+      body: `Your donation for ${donation.foodName} has been picked up. Thank you for your contribution!`,
+      category: 'DONATION',
+      priority: 'medium',
+      data: { donationId: donation._id.toString() }
+    });
 
     // SMS Trigger
     sms.send({
-        userId: donation.donorId._id,
-        phoneNumber: donation.donorId.phoneNumber,
-        templateKey: 'PICKUP_COMPLETED',
-        args: [donation.foodName]
+      userId: donation.donorId._id,
+      phoneNumber: donation.donorId.phoneNumber,
+      templateKey: 'PICKUP_COMPLETED',
+      args: [donation.foodName]
     });
 
     res.status(200).json({ success: true, message: 'QR Verified Successfully', donation });
@@ -532,32 +582,62 @@ exports.confirmDelivery = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Donation not found' });
     }
 
+    // Authorization: Only assigned NGO, volunteer, or admin can confirm delivery
+    const isAssignedNgo = donation.assignedNgoId && donation.assignedNgoId.toString() === req.user.id;
+    const isVolunteer = donation.volunteerId && donation.volunteerId.toString() === req.user.id;
+
+    if (!isAssignedNgo && !isVolunteer && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to confirm delivery for this donation' });
+    }
+
+    if (donation.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Delivery has already been confirmed' });
+    }
+
+    if (donation.status === 'waiting') {
+      return res.status(400).json({ success: false, message: 'Donation must be picked up before confirming delivery' });
+    }
+
     donation.status = 'completed';
     donation.deliveryDetails = {
-      photoUrl,
-      location: { address, latitude, longitude },
-      membersServed,
-      notes,
+      photoUrl: photoUrl || '',
+      location: { address: address || '', latitude: latitude || 0, longitude: longitude || 0 },
+      membersServed: membersServed || 0,
+      notes: notes || '',
       completedAt: Date.now(),
     };
 
     donation.timeline.push({
       status: 'completed',
-      description: `Food delivered successfully. Served ${membersServed} people.`,
+      description: `Food delivered successfully. Served ${membersServed || 0} people.`,
       time: Date.now(),
     });
 
     await donation.save();
 
+    // Broadcast Socket.IO update AFTER successful DB save
+    if (global.io) {
+      const socketPayload = {
+        donationId: donation._id.toString(),
+        status: donation.status,
+        timeline: donation.timeline,
+        donation
+      };
+      if (donation.donorId) {
+        global.io.to(donation.donorId.toString()).emit('donation_status_update', socketPayload);
+      }
+      global.io.emit('donation_status_update', socketPayload);
+    }
+
     // Notify Donor about completion
     notify({
-        userId: donation.donorId,
-        title: 'Mission Accomplished! 🎉',
-        body: `Your food donation reached ${membersServed} people in need. Great job!`,
-        category: 'DONATION',
-        priority: 'medium',
-        data: { donationId: donation._id.toString() }
-      });
+      userId: donation.donorId,
+      title: 'Mission Accomplished! 🎉',
+      body: `Your food donation reached ${membersServed || 0} people in need. Great job!`,
+      category: 'DONATION',
+      priority: 'medium',
+      data: { donationId: donation._id.toString() }
+    });
 
     res.status(200).json({ success: true, message: 'Delivery Confirmed', donation });
   } catch (err) {
@@ -570,10 +650,18 @@ exports.confirmDelivery = async (req, res, next) => {
 // @access  Private (NGO)
 exports.getNgoAssignedDonations = async (req, res, next) => {
   try {
-    const donations = await Donation.find({
-        assignedNgoId: req.user.id,
-        status: { $in: ['accepted', 'on_the_way', 'arrived', 'picked_up'] }
-    }).populate('donorId', 'name phoneNumber currentLatitude currentLongitude').sort('-createdAt');
+    const { status } = req.query;
+    let query = { assignedNgoId: req.user.id };
+
+    if (status) {
+      query.status = status;
+    } else {
+      query.status = { $in: ['accepted', 'on_the_way', 'arrived', 'picked_up', 'delivered', 'completed'] };
+    }
+
+    const donations = await Donation.find(query)
+      .populate('donorId', 'name phoneNumber currentLatitude currentLongitude')
+      .sort('-createdAt');
 
     res.status(200).json({ success: true, count: donations.length, donations });
   } catch (err) {

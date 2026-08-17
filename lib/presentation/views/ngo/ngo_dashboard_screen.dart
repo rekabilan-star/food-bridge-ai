@@ -24,30 +24,26 @@ class NgoDashboardScreen extends StatefulWidget {
 }
 
 class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
-  Timer? _autoRefreshTimer;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshData();
-      _autoRefreshTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-        if (mounted) _refreshData();
-      });
     });
   }
 
-  @override
-  void dispose() {
-    _autoRefreshTimer?.cancel();
-    super.dispose();
-  }
-
   Future<void> _refreshData() async {
-    context.read<DonationViewModel>().fetchNgoAssignedDonations();
-    context.read<EmergencyViewModel>().fetchActiveRequests();
-    context.read<NotificationViewModel>().initSocketListeners();
-    context.read<NotificationViewModel>().fetchNotifications(refresh: true);
+    if (!mounted) return;
+    final dVM = context.read<DonationViewModel>();
+    final eVM = context.read<EmergencyViewModel>();
+    final nVM = context.read<NotificationViewModel>();
+
+    nVM.initSocketListeners();
+    await Future.wait([
+      dVM.fetchNgoAssignedDonations(),
+      eVM.fetchActiveRequests(),
+      nVM.fetchNotifications(refresh: true),
+    ]);
   }
 
   @override

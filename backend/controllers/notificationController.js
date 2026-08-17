@@ -49,14 +49,14 @@ exports.getNotifications = async (req, res, next) => {
     res.status(200).json({
       success: true,
       count: notifications.length,
-      unreadCount,
+      unreadCount: unreadCount || 0,
       pagination: {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit) || 1
       },
-      notifications
+      notifications: notifications || []
     });
   } catch (err) {
     next(err);
@@ -92,14 +92,16 @@ exports.markAsRead = async (req, res, next) => {
 // @access  Private
 exports.markAllRead = async (req, res, next) => {
   try {
-    await Notification.updateMany(
+    const result = await Notification.updateMany(
       { userId: req.user.id, read: false },
       { read: true }
     );
 
     res.status(200).json({
       success: true,
-      message: 'All notifications marked as read'
+      message: 'All notifications marked as read',
+      updatedCount: result.modifiedCount || 0,
+      unreadCount: 0
     });
   } catch (err) {
     next(err);
@@ -118,7 +120,7 @@ exports.deleteNotification = async (req, res, next) => {
     }
 
     if (notification.userId.toString() !== req.user.id) {
-      return res.status(401).json({ success: false, message: 'Not authorized' });
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this notification' });
     }
 
     await notification.deleteOne();
@@ -134,11 +136,12 @@ exports.deleteNotification = async (req, res, next) => {
 // @access  Private
 exports.deleteAllNotifications = async (req, res, next) => {
   try {
-    await Notification.deleteMany({ userId: req.user.id });
+    const result = await Notification.deleteMany({ userId: req.user.id });
 
     res.status(200).json({
       success: true,
-      message: 'All notifications deleted'
+      message: 'All notifications deleted',
+      deletedCount: result.deletedCount || 0
     });
   } catch (err) {
     next(err);

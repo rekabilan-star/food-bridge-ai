@@ -51,8 +51,11 @@ class AuthRepository {
 
   Future<void> forgotPassword(String email) async {
     try {
-      await _apiService.dio.post('auth/forgot-password', data: {'email': email});
+      await _apiService.dio.post('auth/forgot-password', data: {'email': email.trim()});
     } on DioException catch (e) {
+      if (e.response != null && e.response?.data != null && e.response?.data['message'] != null) {
+        throw e.response?.data['message'];
+      }
       throw e.error ?? "Failed to request OTP";
     }
   }
@@ -60,11 +63,14 @@ class AuthRepository {
   Future<void> resetPassword(String email, String otp, String newPassword) async {
     try {
       await _apiService.dio.post('auth/reset-password', data: {
-        'email': email,
-        'otp': otp,
+        'email': email.trim(),
+        'otp': otp.trim(),
         'newPassword': newPassword
       });
     } on DioException catch (e) {
+      if (e.response != null && e.response?.data != null && e.response?.data['message'] != null) {
+        throw e.response?.data['message'];
+      }
       throw e.error ?? "Failed to reset password";
     }
   }

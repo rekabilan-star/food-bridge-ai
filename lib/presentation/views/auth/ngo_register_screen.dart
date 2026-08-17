@@ -202,8 +202,15 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      appBar: const CustomAppBar(
+      appBar: CustomAppBar(
         title: "NGO Partner Application",
+        onBackPressed: () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            Navigator.pushReplacementNamed(context, '/splash');
+          }
+        },
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

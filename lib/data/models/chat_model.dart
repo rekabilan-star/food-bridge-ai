@@ -36,7 +36,20 @@ class ChatModel {
   }
 
   UserModel getOtherParticipant(String currentUserId) {
-    return participants.firstWhere((p) => p.id != currentUserId);
+    try {
+      if (participants.isEmpty) {
+        return UserModel(id: '', email: '', name: 'Participant', role: UserRole.donor, phoneNumber: '');
+      }
+      return participants.firstWhere(
+        (p) => p.id.isNotEmpty && p.id != currentUserId,
+        orElse: () => participants.firstWhere(
+          (p) => p.id != currentUserId,
+          orElse: () => participants.first,
+        ),
+      );
+    } catch (_) {
+      return UserModel(id: '', email: '', name: 'Participant', role: UserRole.donor, phoneNumber: '');
+    }
   }
 
   ChatModel copyWith({

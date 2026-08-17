@@ -96,30 +96,15 @@ class AuthViewModel extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
     try {
-      if (_generatedOtp != null && (otp == _generatedOtp || otp == "1234")) {
-        _user = UserModel(
-          id: 'user_donor_phone',
-          name: 'Super Donor ($phone)',
-          email: '$phone@foodrescue.app',
-          phoneNumber: phone,
-          role: UserRole.donor,
-          address: 'HSR Layout, Bengaluru',
-          latitude: 12.9121,
-          longitude: 77.6446,
-        );
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-        await _initializeServices();
+      if (_generatedOtp != null && otp == _generatedOtp) {
         _setLoading(false);
         return true;
       }
-      
-      // Fallback try standard login
-      final success = await login("donor@example.com", "Password123!");
-      _setLoading(false);
-      return success;
-    } catch (e) {
       _errorMessage = "Invalid verification code entered";
+      _setLoading(false);
+      return false;
+    } catch (e) {
+      _errorMessage = e.toString();
       _setLoading(false);
       return false;
     }
@@ -129,67 +114,14 @@ class AuthViewModel extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
 
-    final trimmedEmail = email.trim().toLowerCase();
-    final trimmedPass = password.trim();
-
-    // 1. Try Backend Database Login API
     try {
       _user = await _authRepository.login(email, password);
       await _initializeServices();
       _setLoading(false);
       return true;
     } catch (e) {
-      // 3. Verify against registered persistent accounts registry
-      final prefs = await SharedPreferences.getInstance();
-      final regJson = prefs.getString('registered_users_registry');
-      
-      if (regJson != null) {
-        final Map<String, dynamic> regMap = json.decode(regJson);
-        if (regMap.containsKey(trimmedEmail)) {
-          final account = regMap[trimmedEmail];
-          if (account['password'] == trimmedPass) {
-            _user = UserModel.fromJson(account['user']);
-            await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-            await _initializeServices();
-            _setLoading(false);
-            return true;
-          }
-        }
-      }
-
-      // Check default demo credentials
-      if (trimmedEmail == 'donor@example.com' && trimmedPass == 'Password123!') {
-        _user = UserModel(
-          id: 'donor_demo',
-          name: 'Demo Donor',
-          email: 'donor@example.com',
-          role: UserRole.donor,
-          phoneNumber: '+91 9876543210',
-          address: 'HSR Layout, Bengaluru',
-          status: 'approved',
-        );
-        await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-        await _initializeServices();
-        _setLoading(false);
-        return true;
-      } else if (trimmedEmail == 'ngo@example.com' && trimmedPass == 'Password123!') {
-        _user = UserModel(
-          id: 'ngo_demo',
-          name: 'Smile Foundation India',
-          email: 'ngo@example.com',
-          role: UserRole.ngo,
-          phoneNumber: '+91 9845012345',
-          address: '42, Indiranagar 100ft Road, Bengaluru',
-          status: 'approved',
-        );
-        await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-        await _initializeServices();
-        _setLoading(false);
-        return true;
-      }
-
-      // NO MATCH FOUND - Strictly block login
-      _errorMessage = "Invalid Email or Password. Please check your credentials or create a new account.";
+      _user = null;
+      _errorMessage = e.toString();
       _setLoading(false);
       return false;
     }
@@ -263,28 +195,14 @@ class AuthViewModel extends ChangeNotifier {
         'longitude': longitude,
         'role': 'donor',
       });
-      await _saveUserToRegistry(email, password, _user!);
       await _initializeServices();
       _setLoading(false);
       return true;
     } catch (e) {
-      _user = UserModel(
-        id: 'donor_${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        email: email,
-        phoneNumber: phoneNumber,
-        role: UserRole.donor,
-        address: address,
-        latitude: latitude,
-        longitude: longitude,
-        status: 'approved',
-      );
-      await _saveUserToRegistry(email, password, _user!);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-      await _initializeServices();
+      _user = null;
+      _errorMessage = e.toString();
       _setLoading(false);
-      return true;
+      return false;
     }
   }
 
@@ -317,49 +235,14 @@ class AuthViewModel extends ChangeNotifier {
         'role': 'ngo',
         'status': 'pending',
       });
-      await _saveUserToRegistry(email, password, _user!);
       await _initializeServices();
       _setLoading(false);
       return true;
     } catch (e) {
-      _user = UserModel(
-        id: 'ngo_pending_${DateTime.now().millisecondsSinceEpoch}',
-        email: email,
-        name: name,
-        role: UserRole.ngo,
-        phoneNumber: phoneNumber,
-        address: address,
-        latitude: latitude,
-        longitude: longitude,
-        ngoRegistrationNumber: regNumber,
-        ngoCertificateUrl: certificateUrl,
-        ngoIdProofUrl: idProofUrl,
-        status: 'pending',
-      );
-      await _saveUserToRegistry(email, password, _user!);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-      await _initializeServices();
+      _user = null;
+      _errorMessage = e.toString();
       _setLoading(false);
-      return true;
-    }
-  }
-
-  Future<void> _saveUserToRegistry(String email, String password, UserModel user) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final regJson = prefs.getString('registered_users_registry');
-      Map<String, dynamic> regMap = {};
-      if (regJson != null) {
-        regMap = Map<String, dynamic>.from(json.decode(regJson));
-      }
-      regMap[email.trim().toLowerCase()] = {
-        'password': password.trim(),
-        'user': user.toJson(),
-      };
-      await prefs.setString('registered_users_registry', json.encode(regMap));
-    } catch (e) {
-      debugPrint("Registry error: $e");
+      return false;
     }
   }
 
@@ -401,19 +284,6 @@ class AuthViewModel extends ChangeNotifier {
       );
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(AppConstants.userDataKey, json.encode(_user!.toJson()));
-      
-      // Update in registry as well
-      final regJson = prefs.getString('registered_users_registry');
-      if (regJson != null) {
-        final Map<String, dynamic> regMap = json.decode(regJson);
-        final key = _user!.email.trim().toLowerCase();
-        if (regMap.containsKey(key)) {
-          final account = Map<String, dynamic>.from(regMap[key]);
-          account['user'] = _user!.toJson();
-          regMap[key] = account;
-          await prefs.setString('registered_users_registry', json.encode(regMap));
-        }
-      }
       
       _safeNotify();
     }

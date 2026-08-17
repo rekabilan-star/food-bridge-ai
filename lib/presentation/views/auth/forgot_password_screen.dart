@@ -31,7 +31,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       final success = await vm.forgotPassword(email);
       if (!mounted) return;
       if (success) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ResetPasswordScreen(email: email)));
+        UIUtils.showSuccessDialog(
+          context,
+          "Recovery code dispatched for $email. Enter the code on the next screen to set your new password.",
+          onOk: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => ResetPasswordScreen(email: email)));
+          },
+        );
       } else if (vm.errorMessage != null) {
         UIUtils.showErrorDialog(context, vm.errorMessage!);
       }

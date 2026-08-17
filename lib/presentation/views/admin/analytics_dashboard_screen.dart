@@ -52,28 +52,38 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchStats),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('Network Health'),
-                  _buildStatCards(),
-                  const SizedBox(height: 32),
-                  _buildSectionTitle('Impact Metrics'),
-                  _buildImpactGrid(),
-                  const SizedBox(height: 32),
-                  _buildSectionTitle('Donation Trends'),
-                  _buildDonationChart(),
-                  const SizedBox(height: 32),
-                  _buildSectionTitle('Category Distribution'),
-                  _buildFoodCategoryChart(),
-                  const SizedBox(height: 40),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _fetchStats,
+        child: _isLoading && _data.isEmpty
+            ? const SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: 400,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('Network Health'),
+                    _buildStatCards(),
+                    const SizedBox(height: 32),
+                    _buildSectionTitle('Impact Metrics'),
+                    _buildImpactGrid(),
+                    const SizedBox(height: 32),
+                    _buildSectionTitle('Donation Trends'),
+                    _buildDonationChart(),
+                    const SizedBox(height: 32),
+                    _buildSectionTitle('Category Distribution'),
+                    _buildFoodCategoryChart(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 

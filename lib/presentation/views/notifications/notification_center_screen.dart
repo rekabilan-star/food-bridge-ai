@@ -129,10 +129,15 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           ),
         ],
       ),
-      body: CustomScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Provider.of<NotificationViewModel>(context, listen: false).fetchNotifications(refresh: true);
+        },
+        color: AppColors.primary,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          slivers: [
 
           SliverToBoxAdapter(
             child: _buildSearchAndFilters(),
@@ -190,7 +195,8 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildSearchAndFilters() {

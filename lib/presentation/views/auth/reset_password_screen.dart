@@ -170,7 +170,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               if (!context.mounted) return;
               if (success) {
                 if (!mounted) return;
-                UIUtils.showSuccessDialog(context, "Password updated successfully!", onOk: () => Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false));
+                UIUtils.showSuccessDialog(context, "Password updated successfully! Please sign in with your new password.", onOk: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false));
               } else if (vm.errorMessage != null) {
                 if (!mounted) return;
                 UIUtils.showErrorDialog(context, vm.errorMessage!);

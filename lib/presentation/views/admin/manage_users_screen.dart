@@ -59,22 +59,33 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildSearchAndFilters(),
-          Expanded(
-            child: viewModel.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : viewModel.users.isEmpty
-                    ? _buildEmptyState()
-                    : Column(
-                        children: [
-                          Expanded(child: _buildUserList(viewModel.users)),
-                          _buildPaginationControls(viewModel),
-                        ],
-                      ),
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _onSearch(page: _currentPage);
+        },
+        child: Column(
+          children: [
+            _buildSearchAndFilters(),
+            Expanded(
+              child: viewModel.isLoading && viewModel.users.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : viewModel.users.isEmpty
+                      ? SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.5,
+                            child: _buildEmptyState(),
+                          ),
+                        )
+                      : Column(
+                          children: [
+                            Expanded(child: _buildUserList(viewModel.users)),
+                            _buildPaginationControls(viewModel),
+                          ],
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }

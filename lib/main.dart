@@ -11,6 +11,8 @@ import 'presentation/viewmodels/notification_viewmodel.dart';
 import 'core/providers/location_provider_v2.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/views/auth/login_screen.dart';
+import 'presentation/views/auth/donor_register_screen.dart';
+import 'presentation/views/auth/ngo_register_screen.dart';
 
 import 'presentation/views/donor/donor_dashboard_screen.dart';
 import 'presentation/views/ngo/ngo_dashboard_screen.dart';
@@ -63,6 +65,8 @@ class MyApp extends StatelessWidget {
         switch (settings.name) {
           case '/splash': page = const SplashScreen(); break;
           case '/login': page = const LoginScreen(); break;
+          case '/donor-register': page = const DonorRegisterScreen(); break;
+          case '/ngo-register': page = const NgoRegisterScreen(); break;
           case '/donor-dashboard': page = const DonorDashboardScreen(); break;
           case '/ngo-dashboard': page = const NgoDashboardScreen(); break;
           case '/admin-dashboard': page = const AdminDashboardScreen(); break;
