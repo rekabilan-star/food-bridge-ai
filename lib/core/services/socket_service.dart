@@ -32,8 +32,8 @@ class SocketService {
       return;
     }
     
-    // Remove /api/ from baseUrl to get the server root for socket.io
-    final String socketUrl = AppConstants.baseUrl.replaceAll('/api/', '');
+    // Get the root server URL for socket.io connection
+    final String socketUrl = AppConstants.serverBaseUrl;
     
     _logger.i('SocketService: Connecting to $socketUrl');
 

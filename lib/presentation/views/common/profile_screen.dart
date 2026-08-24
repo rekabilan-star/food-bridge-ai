@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/ui_utils.dart';
 import '../../../data/models/user_model.dart';
 import 'edit_profile_screen.dart';
 import 'impact_analytics_screen.dart';
@@ -121,8 +122,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               height: 54,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  authVm.logout();
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  UIUtils.showConfirmationDialog(
+                    context: context,
+                    title: "Log Out of Account?",
+                    message: "Are you sure you want to end your current session?",
+                    confirmText: "LOGOUT",
+                    confirmColor: AppColors.error,
+                    onConfirm: () {
+                      authVm.logout();
+                      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                    },
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,

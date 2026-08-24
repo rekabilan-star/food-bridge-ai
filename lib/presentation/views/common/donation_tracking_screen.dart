@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import 'chat_screen.dart';
 import 'rating_screen.dart';
 import '../../../core/utils/receipt_service.dart';
 import '../../../core/utils/intent_utils.dart';
+import '../../../core/utils/ui_utils.dart';
 import '../../../core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 
@@ -100,54 +102,69 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
   }
 
   Widget _buildProgressStepper(String currentStatus) {
-    final List<String> statuses = ['waiting', 'accepted', 'on_the_way', 'arrived', 'picked_up', 'delivered', 'completed'];
-    final int currentIndex = statuses.indexOf(currentStatus);
+    final steps = ["Waiting", "Accepted", "Picked Up", "Completed"];
+    int currentStep = 0;
+    final lower = currentStatus.toLowerCase();
+    if (lower == 'completed' || lower == 'claimed' || lower == 'delivered') {
+      currentStep = 3;
+    } else if (lower == 'picked_up' || lower == 'picked up' || lower == 'on_the_way' || lower == 'arrived' || lower == 'in_transit' || lower == 'en_route') {
+      currentStep = 2;
+    } else if (lower == 'accepted' || lower == 'matched' || lower == 'assigned') {
+      currentStep = 1;
+    }
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       child: Row(
-        children: List.generate(statuses.length, (index) {
-          final bool isCompleted = index <= currentIndex;
-          final bool isLast = index == statuses.length - 1;
-          
+        children: List.generate(steps.length, (index) {
+          final isPassed = index <= currentStep;
+          final isCurrent = index == currentStep;
+          final isLast = index == steps.length - 1;
+
           return Expanded(
             child: Row(
               children: [
-                Column(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: isCompleted ? AppColors.primary : Colors.grey[200],
-                        shape: BoxShape.circle,
+                Expanded(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isPassed ? AppColors.primary : Colors.grey.shade200,
+                              border: isCurrent ? Border.all(color: AppColors.accent, width: 3) : null,
+                            ),
+                            child: isPassed
+                                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                                : Center(child: Text("${index + 1}", style: TextStyle(fontSize: 10, color: Colors.grey.shade600))),
+                          ),
+                          if (!isLast)
+                            Expanded(
+                              child: Container(
+                                height: 2.5,
+                                color: index < currentStep ? AppColors.primary : Colors.grey.shade200,
+                              ),
+                            ),
+                        ],
                       ),
-                      child: Center(
-                        child: isCompleted 
-                          ? const Icon(Icons.check, color: Colors.white, size: 14)
-                          : Text("${index + 1}", style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                      const SizedBox(height: 4),
+                      Text(
+                        steps[index],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                          color: isPassed ? AppColors.textPrimary : Colors.grey.shade400,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getShortStatus(statuses[index]),
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
-                        color: isCompleted ? AppColors.primary : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      color: isCompleted ? AppColors.primary : Colors.grey[200],
-                    ),
+                    ],
                   ),
+                ),
               ],
             ),
           );
@@ -156,51 +173,84 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
     );
   }
 
-  String _getShortStatus(String status) {
-    switch (status) {
-      case 'waiting': return "Wait";
-      case 'accepted': return "Accept";
-      case 'on_the_way': return "Transit";
-      case 'arrived': return "Arrival";
-      case 'picked_up': return "Pickup";
-      case 'delivered': return "Delivery";
-      case 'completed': return "Done";
-      default: return "";
-    }
-  }
-
   Widget _buildTrackingInfoCard(DonationModel donation) {
+    final statusText = StatusUtils.formatStatusLabel(donation.status);
+    final statusColor = StatusUtils.getStatusColor(donation.status);
+    final latestTime = donation.timeline.isNotEmpty ? DateFormat('h:mm a').format(donation.timeline.last.time.toLocal()) : null;
+
+    String distText = "Distance unavailable";
+    String etaText = "ETA unavailable";
+    if (donation.latitude != 0 && donation.longitude != 0 && donation.ngoLat != null && donation.ngoLng != null) {
+      final meters = Geolocator.distanceBetween(donation.latitude, donation.longitude, donation.ngoLat!, donation.ngoLng!);
+      final km = meters / 1000;
+      distText = "${km.toStringAsFixed(1)} km away";
+      final mins = (km / 30 * 60).round();
+      etaText = "~ ${mins > 0 ? mins : 1} mins";
+    }
+
+    final isCompleted = donation.status.toLowerCase() == 'completed' || donation.status.toLowerCase() == 'delivered';
+
     return Positioned(
       top: 16,
       left: 16,
       right: 16,
       child: Card(
-        elevation: 4,
+        elevation: 6,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(18.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("CURRENT STATUS", style: TextStyle(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                  if (latestTime != null)
+                    Text("Updated $latestTime", style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isCompleted ? Icons.check_circle : Icons.circle, size: 12, color: statusColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      statusText,
+                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 25,
+                    radius: 22,
                     backgroundColor: Colors.blue[50],
-                    child: Icon(donation.status == 'completed' ? Icons.check_circle : Icons.local_shipping, color: Colors.blue),
+                    child: Icon(isCompleted ? Icons.check_circle : Icons.local_shipping, color: Colors.blue[800]),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _getStatusText(donation.status),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          donation.assignedNgoName ?? "Finding NGO Partner...",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         Text(
-                          donation.assignedNgoName ?? "Finding NGO Partner...",
-                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                          distText,
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
                         ),
                       ],
                     ),
@@ -217,7 +267,7 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                           icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
                           style: IconButton.styleFrom(backgroundColor: Colors.blue[50]),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         IconButton(
                           onPressed: () => IntentUtils.makePhoneCall(donation.assignedNgoPhone!),
                           icon: const Icon(Icons.phone, color: Colors.green),
@@ -228,23 +278,41 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                 ],
               ),
               if (donation.status == 'on_the_way' || donation.status == 'accepted') ...[
-                  const Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const Divider(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Estimated Time", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    Text(etaText, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700], fontSize: 13)),
+                  ],
+                ),
+              ],
+              if (isCompleted) ...[
+                const Divider(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(10)),
+                  child: Row(
                     children: [
-                      const Text("Estimated Time", style: TextStyle(color: Colors.grey)),
-                      Text("~ 15-20 mins", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700])),
+                      const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Food successfully delivered.${latestTime != null ? ' Completed at $latestTime' : ''}",
+                          style: TextStyle(color: Colors.green[900], fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ],
                   ),
-              ],
-              if (donation.status == 'completed') ...[
-                const Divider(height: 24),
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => ReceiptService.generateAndPrintReceipt(donation),
-                        icon: const Icon(Icons.file_download_outlined),
+                        icon: const Icon(Icons.file_download_outlined, size: 18),
                         label: const Text("RECEIPT"),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -259,7 +327,7 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                           toUserId: donation.assignedNgoId ?? "",
                           toUserName: donation.assignedNgoName ?? "NGO",
                         ))),
-                        icon: const Icon(Icons.star_outline),
+                        icon: const Icon(Icons.star_outline, size: 18),
                         label: const Text("RATE NGO"),
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -278,10 +346,13 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
 
   Widget _buildTimelinePanel(DonationModel donation) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.12,
-      minChildSize: 0.12,
+      initialChildSize: 0.14,
+      minChildSize: 0.14,
       maxChildSize: 0.5,
       builder: (context, scrollController) {
+        final sortedTimeline = List<TimelineModel>.from(donation.timeline)
+          ..sort((a, b) => a.time.compareTo(b.time));
+
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -296,10 +367,21 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
               Center(
                 child: Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               const Text("Rescue Timeline", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              ...donation.timeline.reversed.map((step) => _buildTimelineStep(step, step == donation.timeline.last)),
+              const SizedBox(height: 20),
+              if (sortedTimeline.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+                  child: Center(
+                    child: Text(
+                      "Tracking history is not available yet.",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                )
+              else
+                ...sortedTimeline.asMap().entries.map((entry) => _buildTimelineStep(entry.value, entry.key == sortedTimeline.length - 1)),
               const SizedBox(height: 30),
             ],
           ),
@@ -332,7 +414,7 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
           const SizedBox(width: 20),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 28.0),
+              padding: const EdgeInsets.only(bottom: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -340,24 +422,26 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _getStatusTitle(step.status),
+                        StatusUtils.formatStatusLabel(step.status),
                         style: TextStyle(
                           fontWeight: isLast ? FontWeight.bold : FontWeight.w600,
-                          color: isLast ? Colors.black : Colors.grey[600],
-                          fontSize: 15,
+                          color: isLast ? Colors.black : Colors.grey[700],
+                          fontSize: 14,
                         ),
                       ),
                       Text(
-                        DateFormat('hh:mm a').format(step.time),
+                        DateFormat('h:mm a').format(step.time.toLocal()),
                         style: TextStyle(color: Colors.grey[500], fontSize: 11),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    step.description,
-                    style: TextStyle(color: isLast ? Colors.grey[800] : Colors.grey[400], fontSize: 13, height: 1.4),
-                  ),
+                  if (step.description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      step.description,
+                      style: TextStyle(color: isLast ? Colors.grey[800] : Colors.grey[500], fontSize: 12, height: 1.3),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -365,21 +449,5 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
         ],
       ),
     );
-  }
-
-  String _getStatusText(String status) {
-    switch (status) {
-      case 'accepted': return "NGO has accepted your donation";
-      case 'on_the_way': return "Rescue partner is on the way";
-      case 'arrived': return "Partner has arrived at pickup";
-      case 'picked_up': return "Food is collected & in transit";
-      case 'delivered': return "Food reached distribution point";
-      case 'completed': return "Rescue mission successful! 🎉";
-      default: return "Waiting for a nearby partner...";
-    }
-  }
-
-  String _getStatusTitle(String status) {
-    return status.split('_').map((e) => e[0].toUpperCase() + e.substring(1)).join(' ');
   }
 }

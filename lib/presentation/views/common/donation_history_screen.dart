@@ -7,6 +7,7 @@ import 'widgets/custom_app_bar.dart';
 import 'widgets/donation_card.dart';
 import 'widgets/modern_text_field.dart';
 import 'widgets/shimmer_loading.dart';
+import '../../../core/utils/ui_utils.dart';
 
 class DonationHistoryScreen extends StatefulWidget {
   const DonationHistoryScreen({super.key});
@@ -93,11 +94,24 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
                           itemCount: filteredDonations.length,
                           itemBuilder: (context, index) {
                             final donation = filteredDonations[index];
+                            final diff = DateTime.now().difference(donation.preparedTime.toLocal());
+                            String timeAgoVal = "Recently";
+                            if (diff.inSeconds < 60) {
+                              timeAgoVal = "Just now";
+                            } else if (diff.inMinutes < 60) {
+                              timeAgoVal = "${diff.inMinutes} mins ago";
+                            } else if (diff.inHours < 24) {
+                              timeAgoVal = "${diff.inHours} hrs ago";
+                            } else if (diff.inDays < 7) {
+                              timeAgoVal = "${diff.inDays} days ago";
+                            }
+
                             return DonationCard(
                               title: donation.foodName,
                               subtitle: "${donation.membersServed} Served • ${donation.category}",
-                              status: donation.status == 'waiting' ? 'Pending' : donation.status,
-                              timeAgo: "Recently",
+                              status: StatusUtils.formatStatusLabel(donation.status),
+                              timeAgo: timeAgoVal,
+                              imageUrl: donation.imageUrl,
                               onTap: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text("Selected donation: ${donation.foodName}")),

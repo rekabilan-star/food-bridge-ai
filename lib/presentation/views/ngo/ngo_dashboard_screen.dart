@@ -8,13 +8,16 @@ import '../../viewmodels/notification_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import 'ngo_donation_requests_screen.dart';
 import 'ngo_tracking_screen.dart';
+import 'donation_details_screen.dart';
 import 'emergency_request_screen.dart';
 import '../../../data/models/donation_model.dart';
 import '../common/widgets/shimmer_loading.dart';
 import '../common/widgets/donation_card.dart';
 import '../common/widgets/user_profile_modal.dart';
+import '../../../core/utils/ui_utils.dart';
 
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 
 class NgoDashboardScreen extends StatefulWidget {
   const NgoDashboardScreen({super.key});
@@ -342,25 +345,50 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
   }
 
   Widget _buildActiveTasksList(List<DonationModel> donations) {
+    final user = context.watch<AuthViewModel>().user;
+    final double userLat = user?.latitude ?? 0;
+    final double userLng = user?.longitude ?? 0;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: donations.length,
       itemBuilder: (context, index) {
         final donation = donations[index];
-        final status = donation.status == 'waiting' ? 'Pending' : (donation.status == 'picked_up' ? 'En Route' : donation.status);
+        final status = StatusUtils.formatStatusLabel(donation.status);
+        
+        String distText = "Distance unavailable";
+        String etaVal = "15 mins";
+        if (userLat != 0 && userLng != 0 && donation.latitude != 0 && donation.longitude != 0) {
+          final meters = Geolocator.distanceBetween(userLat, userLng, donation.latitude, donation.longitude);
+          distText = "${(meters / 1000).toStringAsFixed(1)} km away";
+          final mins = ((meters / 1000) / 30 * 60).round();
+          etaVal = "${mins > 0 ? mins : 5} mins";
+        }
+
+        final diff = DateTime.now().difference(donation.preparedTime.toLocal());
+        String timeAgoVal = "Recently";
+        if (diff.inSeconds < 60) {
+          timeAgoVal = "Just now";
+        } else if (diff.inMinutes < 60) {
+          timeAgoVal = "${diff.inMinutes} mins ago";
+        } else if (diff.inHours < 24) {
+          timeAgoVal = "${diff.inHours} hrs ago";
+        }
+
         return DonationCard(
           title: donation.foodName,
           subtitle: "${donation.membersServed} Served • Pickup: ${donation.pickupAddress}",
           status: status,
-          timeAgo: "10 mins ago",
-          etaText: "ETA: 14 mins",
-          distanceText: "2.4 km away",
+          timeAgo: timeAgoVal,
+          etaText: etaVal,
+          distanceText: distText,
+          imageUrl: donation.imageUrl,
           onTrackTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
           },
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
+            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
           },
         );
       },

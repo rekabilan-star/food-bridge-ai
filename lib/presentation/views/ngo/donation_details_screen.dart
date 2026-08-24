@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,8 @@ import '../../viewmodels/donation_viewmodel.dart';
 import '../../../core/utils/intent_utils.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/user_model.dart';
+import 'ngo_tracking_screen.dart';
+import 'delivery_confirmation_screen.dart';
 
 class DonationDetailsScreen extends StatelessWidget {
   final DonationModel donation;
@@ -49,12 +52,78 @@ class DonationDetailsScreen extends StatelessWidget {
                     builder: (context, auth, viewModel, _) {
                       if (auth.user?.role != UserRole.ngo) return const SizedBox.shrink();
 
-                      return ElevatedButton(
+                      final statusLower = donation.status.toLowerCase();
+
+                      if (statusLower == 'completed') {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.green[50],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.green[300]!),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.green, size: 24),
+                              const SizedBox(width: 10),
+                              Text(
+                                "Donation Successfully Completed",
+                                style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (statusLower == 'picked_up') {
+                        return ElevatedButton.icon(
+                          onPressed: viewModel.isLoading
+                              ? null
+                              : () => Navigator.push(context, MaterialPageRoute(builder: (_) => DeliveryConfirmationScreen(donation: donation))),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          icon: const Icon(Icons.local_shipping_rounded),
+                          label: const Text("PROCEED TO DELIVERY", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        );
+                      }
+
+                      if (statusLower == 'accepted' || statusLower == 'on_the_way' || statusLower == 'arrived') {
+                        return ElevatedButton.icon(
+                          onPressed: viewModel.isLoading
+                              ? null
+                              : () => Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id))),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.ngoColor,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          icon: const Icon(Icons.navigation_rounded),
+                          label: const Text("TRACK PICKUP / RESCUE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        );
+                      }
+
+                      return ElevatedButton.icon(
                         onPressed: viewModel.isLoading ? null : () => _confirmAcceptance(context, viewModel),
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),
-                        child: viewModel.isLoading 
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text("ACCEPT DONATION"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.ngoColor,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 54),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: viewModel.isLoading
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.check_circle_rounded),
+                        label: Text(
+                          viewModel.isLoading ? "PROCESSING..." : "ACCEPT DONATION",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
                       );
                     }
                   ),
@@ -68,23 +137,76 @@ class DonationDetailsScreen extends StatelessWidget {
     );
   }
 
+  String _resolveFoodImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (File(trimmed).existsSync()) {
+      return trimmed;
+    }
+    final rootServer = AppConstants.serverBaseUrl;
+    final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$rootServer$cleanPath';
+  }
+
   Widget _buildImageHeader() {
-    String imageUrl = donation.imageUrl;
-    if (!imageUrl.startsWith('http')) {
-        imageUrl = '${AppConstants.baseUrl}/$imageUrl'.replaceAll('/api/', '/');
+    final rawUrl = donation.imageUrl;
+    final resolvedUrl = _resolveFoodImageUrl(rawUrl);
+    final isLocalFile = rawUrl.isNotEmpty && File(rawUrl).existsSync();
+
+    if (resolvedUrl.isEmpty) {
+      return _buildUnavailableImageHeader();
     }
 
     return Container(
       height: 250,
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.grey[300],
-        image: imageUrl.isNotEmpty ? DecorationImage(
-          image: NetworkImage(imageUrl),
-          fit: BoxFit.cover,
-        ) : null,
+      color: Colors.grey[200],
+      child: isLocalFile
+          ? Image.file(
+              File(rawUrl),
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: 250,
+            )
+          : Image.network(
+              resolvedUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: 250,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const Center(child: CircularProgressIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return _buildUnavailableImageHeader();
+              },
+            ),
+    );
+  }
+
+  Widget _buildUnavailableImageHeader() {
+    return Container(
+      height: 220,
+      width: double.infinity,
+      color: Colors.grey[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.fastfood_rounded, size: 56, color: Colors.grey[400]),
+          const SizedBox(height: 10),
+          Text(
+            "Food image unavailable",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
       ),
-      child: imageUrl.isEmpty ? const Icon(Icons.restaurant, size: 64, color: Colors.grey) : null,
     );
   }
 

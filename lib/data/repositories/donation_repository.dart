@@ -20,8 +20,20 @@ class DonationRepository {
         data: formData,
       );
       
-      if (response.data != null && response.data['data'] != null) {
-        return response.data['data'];
+      if (response.data != null && response.data is Map) {
+        final res = response.data as Map;
+        if (res['data'] != null && res['data'].toString().isNotEmpty) {
+          return res['data'].toString();
+        }
+        if (res['imageUrl'] != null && res['imageUrl'].toString().isNotEmpty) {
+          return res['imageUrl'].toString();
+        }
+        if (res['url'] != null && res['url'].toString().isNotEmpty) {
+          return res['url'].toString();
+        }
+        if (res['path'] != null && res['path'].toString().isNotEmpty) {
+          return res['path'].toString();
+        }
       }
       return imageFile.path;
     } catch (e) {

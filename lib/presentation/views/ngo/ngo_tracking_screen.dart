@@ -163,14 +163,36 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
                 _buildPrimaryButton("PROCEED TO DELIVERY", Icons.local_shipping, Colors.teal, () {
                    Navigator.push(context, MaterialPageRoute(builder: (_) => DeliveryConfirmationScreen(donation: donation)));
                 })
-            else if (donation.status == 'completed')
-                _buildPrimaryButton("RATE DONOR", Icons.star, Colors.amber, () {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
-                     donationId: donation.id,
-                     toUserId: donation.donorId,
-                     toUserName: donation.donorName ?? "Donor",
-                   )));
-                }),
+            else if (donation.status == 'completed') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.green[300]!),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      "✓ Donation Completed",
+                      style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildPrimaryButton("RATE DONOR", Icons.star_outline, Colors.amber.shade800, () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
+                  donationId: donation.id,
+                  toUserId: donation.donorId,
+                  toUserName: donation.donorName ?? "Donor",
+                )));
+              }),
+            ],
           ],
         ),
       ),

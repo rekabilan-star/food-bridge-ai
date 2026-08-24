@@ -186,8 +186,10 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
       if (success) {
         UIUtils.showSuccessDialog(
           context, 
-          "Application Submitted! Our team will review your NGO documentation shortly.",
-          onOk: () => Navigator.pop(context),
+          "Application Submitted! Our team will review your NGO documentation shortly. Please log in with your credentials.",
+          onOk: () {
+            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          },
         );
       } else {
         UIUtils.showErrorDialog(context, authVM.errorMessage ?? "Registration Error");

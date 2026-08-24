@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
+import '../../../core/constants/app_constants.dart';
 import 'donation_details_screen.dart';
 
 class NgoDonationRequestsScreen extends StatefulWidget {
@@ -109,10 +111,31 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
     );
   }
 
+  String _resolveFoodImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (File(trimmed).existsSync()) {
+      return trimmed;
+    }
+    final rootServer = AppConstants.serverBaseUrl;
+    final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$rootServer$cleanPath';
+  }
+
   Widget _buildRequestCard(DonationModel donation) {
+    final rawUrl = donation.imageUrl;
+    final resolvedUrl = _resolveFoodImageUrl(rawUrl);
+    final isLocalFile = rawUrl.isNotEmpty && File(rawUrl).existsSync();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: () => Navigator.push(
           context, 
           MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation))
@@ -123,31 +146,62 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
-                    child: const Text("98% AI Score", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      color: Colors.grey[200],
+                      child: resolvedUrl.isEmpty
+                          ? Icon(Icons.fastfood_rounded, color: Colors.grey[400], size: 32)
+                          : (isLocalFile
+                              ? Image.file(File(rawUrl), fit: BoxFit.cover)
+                              : Image.network(
+                                  resolvedUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(Icons.fastfood_rounded, color: Colors.grey[400], size: 32),
+                                )),
+                    ),
                   ),
-                  const Text("NEARBY", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
+                              child: const Text("98% AI Score", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                            const Text("NEARBY", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(donation.foodName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(donation.pickupAddress, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(donation.foodName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(donation.pickupAddress, style: const TextStyle(color: Colors.grey, fontSize: 14)),
               const Divider(height: 24),
               Row(
                 children: [
                   const Icon(Icons.people_outline, size: 16, color: Colors.grey),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text("Serves ${donation.membersServed} Members", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                   const Spacer(),
                   const Icon(Icons.timer_outlined, size: 16, color: Colors.red),
                   const SizedBox(width: 4),
                   Text(
-                    "Best before ${donation.bestBeforeTime.hour}:${donation.bestBeforeTime.minute}", 
+                    "Best before ${donation.bestBeforeTime.hour}:${donation.bestBeforeTime.minute.toString().padLeft(2, '0')}", 
                     style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)
                   ),
                 ],

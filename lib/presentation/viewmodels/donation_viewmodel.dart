@@ -3,11 +3,14 @@ import 'dart:io';
 import '../../data/models/donation_model.dart';
 import '../../data/repositories/donation_repository.dart';
 import '../../core/services/socket_service.dart';
+import '../../core/services/push_notification_service.dart';
+import '../../core/utils/ui_utils.dart';
 
 class DonationViewModel extends ChangeNotifier {
   final DonationRepository _repository = DonationRepository();
   final SocketService _socketService = SocketService();
   bool _disposed = false;
+  String? _lastNotifiedEventKey;
 
   void _safeNotify() {
     if (!_disposed) notifyListeners();
@@ -47,21 +50,54 @@ class DonationViewModel extends ChangeNotifier {
 
     _socketService.socket.off('donation_status_update');
     _socketService.onDonationStatusUpdate((data) {
-      final String? updatedId = data['donationId'];
-      if (_currentDonation != null && _currentDonation!.id == updatedId) {
+      final String? updatedId = data['donationId'] ?? data['donation']?['_id'] ?? data['donation']?['id'];
+      final String? newStatus = data['status'] ?? data['donation']?['status'];
+      final List timelineList = (data['timeline'] as List? ?? data['donation']?['timeline'] as List? ?? []);
+      final parsedTimeline = timelineList.map((t) => TimelineModel.fromJson(t)).toList();
+
+      if (_currentDonation != null && _currentDonation!.id == updatedId && newStatus != null) {
         _currentDonation = _currentDonation!.copyWith(
-          status: data['status'],
-          timeline: (data['timeline'] as List)
-              .map((t) => TimelineModel.fromJson(t))
-              .toList(),
+          status: newStatus,
+          timeline: parsedTimeline.isNotEmpty ? parsedTimeline : _currentDonation!.timeline,
         );
-        _safeNotify();
       }
       
       final index = _donations.indexWhere((d) => d.id == updatedId);
-      if (index != -1) {
-        _donations[index] = _donations[index].copyWith(status: data['status']);
-        _safeNotify();
+      if (index != -1 && newStatus != null) {
+        _donations[index] = _donations[index].copyWith(
+          status: newStatus,
+          timeline: parsedTimeline.isNotEmpty ? parsedTimeline : _donations[index].timeline,
+        );
+      }
+
+      final assignedIdx = _assignedDonations.indexWhere((d) => d.id == updatedId);
+      if (assignedIdx != -1 && newStatus != null) {
+        _assignedDonations[assignedIdx] = _assignedDonations[assignedIdx].copyWith(
+          status: newStatus,
+          timeline: parsedTimeline.isNotEmpty ? parsedTimeline : _assignedDonations[assignedIdx].timeline,
+        );
+      }
+
+      _safeNotify();
+
+      // Non-blocking local heads-up notification display with duplicate event protection
+      try {
+        if (updatedId != null && newStatus != null) {
+          final String timeStampKey = parsedTimeline.isNotEmpty
+              ? parsedTimeline.last.time.millisecondsSinceEpoch.toString()
+              : DateTime.now().minute.toString();
+          final String currentEventKey = "${updatedId}_${newStatus}_$timeStampKey";
+
+          if (_lastNotifiedEventKey != currentEventKey) {
+            _lastNotifiedEventKey = currentEventKey;
+            PushNotificationService.showNotification(
+              title: "Donation Status Updated",
+              body: "Your donation is now ${StatusUtils.formatStatusLabel(newStatus)}",
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[DonationViewModel] Non-blocking local notification error: $e');
       }
     });
   }
@@ -233,6 +269,8 @@ class DonationViewModel extends ChangeNotifier {
     _setLoading(true);
     try {
       _currentDonation = await _repository.verifyQrPickup(id, qrCode);
+      await fetchNgoAssignedDonations();
+      await fetchDonorDonations();
       _errorMessage = null;
       _setLoading(false);
       return true;
@@ -247,6 +285,8 @@ class DonationViewModel extends ChangeNotifier {
     _setLoading(true);
     try {
       _currentDonation = await _repository.confirmDelivery(id, data);
+      await fetchNgoAssignedDonations();
+      await fetchDonorDonations();
       _errorMessage = null;
       _setLoading(false);
       return true;

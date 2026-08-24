@@ -8,8 +8,12 @@ class ApiService {
   final _secureStorage = const FlutterSecureStorage();
   
   ApiService() {
+    final String normalizedBaseUrl = AppConstants.baseUrl.endsWith('/')
+        ? AppConstants.baseUrl
+        : '${AppConstants.baseUrl}/';
+
     dio = Dio(BaseOptions(
-      baseUrl: AppConstants.baseUrl,
+      baseUrl: normalizedBaseUrl,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
@@ -45,7 +49,7 @@ class ApiService {
           if (refreshToken != null && refreshToken.isNotEmpty) {
             try {
               final refreshDio = Dio(BaseOptions(
-                baseUrl: AppConstants.baseUrl,
+                baseUrl: normalizedBaseUrl,
                 connectTimeout: const Duration(seconds: 15),
                 receiveTimeout: const Duration(seconds: 15),
               ));

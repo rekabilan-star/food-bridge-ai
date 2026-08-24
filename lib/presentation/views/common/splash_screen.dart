@@ -8,6 +8,7 @@ import 'widgets/primary_button.dart';
 import 'widgets/secondary_button.dart';
 import '../auth/donor_register_screen.dart';
 import '../auth/ngo_register_screen.dart';
+import '../auth/ngo_approval_pending_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,7 +18,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  bool _isAutoChecking = true;
+  final bool _isAutoChecking = true;
 
   @override
   void initState() {
@@ -29,14 +30,17 @@ class _SplashScreenState extends State<SplashScreen> {
     debugPrint('[STARTUP] SplashScreen _navigateToNext started');
     try {
       final authVM = context.read<AuthViewModel>();
-      await authVM.checkLoginStatus().timeout(const Duration(seconds: 4), onTimeout: () {
-        debugPrint('[STARTUP ERROR] checkLoginStatus timed out');
-      });
+      await authVM.checkLoginStatus().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () {
+          debugPrint('[STARTUP ERROR] checkLoginStatus timed out');
+        },
+      );
     } catch (e) {
       debugPrint('[STARTUP ERROR] Splash init: $e');
     }
     
-    await Future.delayed(2000.ms);
+    await Future.delayed(1500.ms);
     
     if (!mounted) return;
 
@@ -47,18 +51,22 @@ class _SplashScreenState extends State<SplashScreen> {
       if (role == UserRole.donor) {
         Navigator.pushReplacementNamed(context, '/donor-dashboard');
       } else if (role == UserRole.ngo) {
-        Navigator.pushReplacementNamed(context, '/ngo-dashboard');
+        final status = (authVM.user!.status ?? 'approved').toLowerCase();
+        if (status == 'pending') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const NgoApprovalPendingScreen()),
+          );
+        } else {
+          Navigator.pushReplacementNamed(context, '/ngo-dashboard');
+        }
       } else if (role == UserRole.admin) {
         Navigator.pushReplacementNamed(context, '/admin-dashboard');
       } else {
         Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
-      if (mounted) {
-        setState(() {
-          _isAutoChecking = false;
-        });
-      }
+      Navigator.pushReplacementNamed(context, '/login');
     }
   }
 

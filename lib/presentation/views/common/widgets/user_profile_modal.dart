@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/models/user_model.dart';
+import '../../../../core/utils/ui_utils.dart';
 
 class UserProfileModal {
   static void show(BuildContext context) {
@@ -102,9 +103,18 @@ class UserProfileModal {
               height: 54,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  Navigator.pop(context);
-                  context.read<AuthViewModel>().logout();
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  UIUtils.showConfirmationDialog(
+                    context: context,
+                    title: "Log Out of Account?",
+                    message: "Are you sure you want to end your current session?",
+                    confirmText: "LOGOUT",
+                    confirmColor: AppColors.error,
+                    onConfirm: () {
+                      Navigator.pop(context);
+                      context.read<AuthViewModel>().logout();
+                      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                    },
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.error,

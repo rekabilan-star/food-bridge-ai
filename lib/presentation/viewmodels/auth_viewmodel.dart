@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/donation_repository.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/services/socket_service.dart';
@@ -47,19 +49,34 @@ class AuthViewModel extends ChangeNotifier {
       final token = await _authRepository.getToken();
       _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
       
-      if (userData != null && token != null) {
-        debugPrint('[STARTUP] user data found, initializing services');
+      if (userData != null && token != null && token.isNotEmpty) {
+        debugPrint('[STARTUP] Saved session found, restoring user');
         _user = UserModel.fromJson(json.decode(userData));
-        // Requirement 2: Do NOT block startup with service initialization
+        
+        try {
+          final freshUser = await _authRepository.getProfile();
+          _user = freshUser;
+        } catch (e) {
+          debugPrint('[STARTUP] Profile refresh info: $e');
+          final errStr = e.toString().toLowerCase();
+          if (errStr.contains('401') || errStr.contains('unauthorized') || errStr.contains('invalid token')) {
+            debugPrint('[STARTUP] Expired or invalid token detected, clearing session');
+            await logout();
+            return;
+          }
+        }
+        
         _initializeServices(); 
       } else {
-        debugPrint('[STARTUP] no user data found');
+        debugPrint('[STARTUP] No saved session found');
+        _user = null;
       }
     } catch (e) {
-      debugPrint('[STARTUP ERROR] Auth check: $e');
+      debugPrint('[STARTUP ERROR] Auth check failed: $e');
+      _user = null;
     } finally {
       _safeNotify();
-      debugPrint('[STARTUP] AuthViewModel.checkLoginStatus completed');
+      debugPrint('[STARTUP] AuthViewModel.checkLoginStatus completed (user: ${_user?.email}, role: ${_user?.role})');
     }
   }
 
@@ -221,7 +238,25 @@ class AuthViewModel extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
     try {
-      _user = await _authRepository.registerNgo({
+      String finalCertUrl = certificateUrl;
+      if (certificateUrl.isNotEmpty && File(certificateUrl).existsSync()) {
+        try {
+          finalCertUrl = await DonationRepository().uploadImage(File(certificateUrl));
+        } catch (e) {
+          debugPrint('[NGO Reg] Certificate upload warning: $e');
+        }
+      }
+
+      String finalIdUrl = idProofUrl;
+      if (idProofUrl.isNotEmpty && File(idProofUrl).existsSync()) {
+        try {
+          finalIdUrl = await DonationRepository().uploadImage(File(idProofUrl));
+        } catch (e) {
+          debugPrint('[NGO Reg] ID proof upload warning: $e');
+        }
+      }
+
+      await _authRepository.registerNgo({
         'name': name,
         'email': email,
         'password': password,
@@ -230,12 +265,12 @@ class AuthViewModel extends ChangeNotifier {
         'latitude': latitude,
         'longitude': longitude,
         'ngoRegistrationNumber': regNumber,
-        'ngoCertificateUrl': certificateUrl,
-        'ngoIdProofUrl': idProofUrl,
+        'ngoCertificateUrl': finalCertUrl,
+        'ngoIdProofUrl': finalIdUrl,
         'role': 'ngo',
         'status': 'pending',
       });
-      await _initializeServices();
+      _user = null;
       _setLoading(false);
       return true;
     } catch (e) {

@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
 
 class DonationCard extends StatelessWidget {
   final String title;
@@ -7,6 +9,7 @@ class DonationCard extends StatelessWidget {
   final String status;
   final String timeAgo;
   final IconData icon;
+  final String? imageUrl;
   final String? etaText;
   final String? distanceText;
   final VoidCallback? onTap;
@@ -20,6 +23,7 @@ class DonationCard extends StatelessWidget {
     required this.status,
     required this.timeAgo,
     this.icon = Icons.restaurant_rounded,
+    this.imageUrl,
     this.etaText,
     this.distanceText,
     this.onTap,
@@ -27,27 +31,32 @@ class DonationCard extends StatelessWidget {
     this.onCallTap,
   });
 
-  int _getStatusStepIndex() {
-    switch (status.toLowerCase()) {
-      case 'pending':
-      case 'available':
-      case 'requested':
-        return 0;
-      case 'accepted':
-      case 'matched':
-      case 'assigned':
-        return 1;
-      case 'picked up':
-      case 'in_progress':
-      case 'en_route':
-        return 2;
-      case 'completed':
-      case 'claimed':
-      case 'delivered':
-        return 3;
-      default:
-        return 0;
+  String _resolveImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
     }
+    if (File(trimmed).existsSync()) {
+      return trimmed;
+    }
+    final rootServer = AppConstants.serverBaseUrl;
+    final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$rootServer$cleanPath';
+  }
+
+  int _getStatusStepIndex() {
+    final lower = status.toLowerCase();
+    if (lower == 'completed' || lower == 'claimed' || lower == 'delivered') {
+      return 3;
+    }
+    if (lower == 'picked_up' || lower == 'picked up' || lower == 'on_the_way' || lower == 'arrived' || lower == 'in_transit' || lower == 'en_route') {
+      return 2;
+    }
+    if (lower == 'accepted' || lower == 'matched' || lower == 'assigned') {
+      return 1;
+    }
+    return 0;
   }
 
   @override
@@ -99,15 +108,7 @@ class DonationCard extends StatelessWidget {
                 // Header Row
                 Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(icon, color: AppColors.primary, size: 22),
-                    ),
+                    _buildLeadingThumbnail(),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -239,9 +240,46 @@ class DonationCard extends StatelessWidget {
       ),
     );
   }
+  Widget _buildLeadingThumbnail() {
+    final resolved = _resolveImageUrl(imageUrl);
+    final isLocal = imageUrl != null && imageUrl!.isNotEmpty && File(imageUrl!).existsSync();
+
+    if (resolved.isNotEmpty || isLocal) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 48,
+          height: 48,
+          color: Colors.grey[200],
+          child: isLocal
+              ? Image.file(File(imageUrl!), fit: BoxFit.cover)
+              : Image.network(
+                  resolved,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: AppColors.accent.withValues(alpha: 0.25),
+                      child: Icon(icon, color: AppColors.primary, size: 22),
+                    );
+                  },
+                ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Icon(icon, color: AppColors.primary, size: 22),
+    );
+  }
 
   Widget _buildProgressStepper(int currentStep) {
-    final steps = ["Requested", "Matched", "En Route", "Delivered"];
+    final steps = ["Waiting", "Accepted", "Picked Up", "Completed"];
 
     return Row(
       children: List.generate(steps.length, (index) {

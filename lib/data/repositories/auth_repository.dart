@@ -84,7 +84,14 @@ class AuthRepository {
   }
 
   Future<String?> getToken() async {
-    return await _secureStorage.read(key: AppConstants.tokenKey);
+    try {
+      final token = await _secureStorage.read(key: AppConstants.tokenKey);
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(AppConstants.tokenKey);
   }
 
   Future<void> refreshToken() async {
@@ -93,13 +100,15 @@ class AuthRepository {
       if (rToken == null) return;
 
       final response = await Dio().post(
-        '${AppConstants.baseUrl}auth/refresh-token', 
+        AppConstants.buildUrl('auth/refresh-token'), 
         data: {'refreshToken': rToken}
       );
       
       if (response.statusCode == 200) {
         await _secureStorage.write(key: AppConstants.tokenKey, value: response.data['token']);
         await _secureStorage.write(key: 'refresh_token', value: response.data['refreshToken']);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.tokenKey, response.data['token']);
       }
     } catch (e) {
       await logout();
@@ -114,14 +123,16 @@ class AuthRepository {
       );
       final resData = response.data;
       final user = UserModel.fromJson(resData['user']);
+      final prefs = await SharedPreferences.getInstance();
       if (resData['token'] != null) {
         await _secureStorage.write(key: AppConstants.tokenKey, value: resData['token']);
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString(AppConstants.tokenKey, resData['token']);
       }
       if (resData['refreshToken'] != null) {
         await _secureStorage.write(key: 'refresh_token', value: resData['refreshToken']);
       }
+      await prefs.setString(AppConstants.roleKey, user.role.toString().split('.').last);
+      await prefs.setString(AppConstants.userDataKey, json.encode(user.toJson()));
       return user;
     } on DioException catch (e) {
       throw e.error ?? "Registration Error";
@@ -136,14 +147,6 @@ class AuthRepository {
       );
       final resData = response.data;
       final user = UserModel.fromJson(resData['user']);
-      if (resData['token'] != null) {
-        await _secureStorage.write(key: AppConstants.tokenKey, value: resData['token']);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(AppConstants.tokenKey, resData['token']);
-      }
-      if (resData['refreshToken'] != null) {
-        await _secureStorage.write(key: 'refresh_token', value: resData['refreshToken']);
-      }
       return user;
     } on DioException catch (e) {
       throw e.error ?? "Registration Error";
@@ -156,6 +159,7 @@ class AuthRepository {
       final user = UserModel.fromJson(response.data['data']);
       
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(AppConstants.roleKey, user.role.toString().split('.').last);
       await prefs.setString(AppConstants.userDataKey, json.encode(user.toJson()));
       
       return user;

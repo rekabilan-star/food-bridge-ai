@@ -12,7 +12,7 @@ class TimelineModel {
   factory TimelineModel.fromJson(Map<String, dynamic> json) {
     DateTime parsedTime;
     try {
-      parsedTime = json['time'] != null ? DateTime.parse(json['time'].toString()) : DateTime.now();
+      parsedTime = json['time'] != null ? DateTime.parse(json['time'].toString()).toLocal() : DateTime.now();
     } catch (_) {
       parsedTime = DateTime.now();
     }
@@ -114,7 +114,7 @@ class DeliveryDetailsModel {
   factory DeliveryDetailsModel.fromJson(Map<String, dynamic> json) {
     DateTime? parsedCompletedAt;
     try {
-      parsedCompletedAt = json['completedAt'] != null ? DateTime.parse(json['completedAt'].toString()) : null;
+      parsedCompletedAt = json['completedAt'] != null ? DateTime.parse(json['completedAt'].toString()).toLocal() : null;
     } catch (_) {
       parsedCompletedAt = null;
     }
@@ -195,6 +195,30 @@ class DonationModel {
     final donorData = json['donorId'] is Map ? json['donorId'] : null;
     final ngoData = json['assignedNgoId'] is Map ? json['assignedNgoId'] : null;
 
+    final DateTime prepTime = json['preparedTime'] != null
+        ? DateTime.parse(json['preparedTime'].toString()).toLocal()
+        : (json['createdAt'] != null ? DateTime.parse(json['createdAt'].toString()).toLocal() : DateTime.now());
+
+    final DateTime bestTime = json['bestBeforeTime'] != null
+        ? DateTime.parse(json['bestBeforeTime'].toString()).toLocal()
+        : DateTime.now();
+
+    final DateTime? schedTime = json['scheduledTimestamp'] != null 
+        ? DateTime.parse(json['scheduledTimestamp'].toString()).toLocal() : null;
+
+    final parsedTimeline = (json['timeline'] as List? ?? [])
+        .map((t) => TimelineModel.fromJson(t))
+        .toList();
+
+    final statusStr = (json['status'] ?? 'waiting').toString();
+    final finalTimeline = parsedTimeline.isNotEmpty
+        ? parsedTimeline
+        : _buildDefaultTimeline(
+            status: statusStr,
+            createdAt: prepTime,
+            ngoName: ngoData != null ? ngoData['name'] : json['assignedNgoName'],
+          );
+
     return DonationModel(
       id: json['_id'] ?? json['id'] ?? '',
       donorId: donorData != null ? (donorData['_id'] ?? '') : (json['donorId'] ?? ''),
@@ -206,18 +230,17 @@ class DonationModel {
       foodName: json['foodName'] ?? '',
       category: json['category'] ?? '',
       membersServed: json['membersServed'] ?? 0,
-      imageUrl: json['imageUrl'] ?? '',
-      preparedTime: json['preparedTime'] != null ? DateTime.parse(json['preparedTime']) : DateTime.now(),
-      bestBeforeTime: json['bestBeforeTime'] != null ? DateTime.parse(json['bestBeforeTime']) : DateTime.now(),
+      imageUrl: (json['imageUrl'] ?? json['image'] ?? json['photoUrl'] ?? '').toString(),
+      preparedTime: prepTime,
+      bestBeforeTime: bestTime,
       checklist: QualityChecklist.fromJson(json['checklist'] ?? {}),
       isScheduled: json['isScheduled'] ?? false,
-      scheduledTimestamp: json['scheduledTimestamp'] != null 
-          ? DateTime.parse(json['scheduledTimestamp']) : null,
+      scheduledTimestamp: schedTime,
       pickupAddress: json['pickupAddress'] ?? '',
       latitude: (json['latitude'] ?? 0).toDouble(),
       longitude: (json['longitude'] ?? 0).toDouble(),
       specialInstructions: json['specialInstructions'],
-      status: json['status'] ?? 'waiting',
+      status: statusStr,
       assignedNgoId: ngoData != null ? ngoData['_id'] : json['assignedNgoId'],
       assignedNgoName: ngoData != null ? ngoData['name'] : json['assignedNgoName'],
       assignedNgoPhone: ngoData != null ? ngoData['phoneNumber'] : null,
@@ -225,13 +248,49 @@ class DonationModel {
       ngoLat: ngoData != null ? (ngoData['currentLatitude'] ?? ngoData['latitude'])?.toDouble() : null,
       ngoLng: ngoData != null ? (ngoData['currentLongitude'] ?? ngoData['longitude'])?.toDouble() : null,
       qrCode: json['qrCode'],
-      timeline: (json['timeline'] as List? ?? [])
-          .map((t) => TimelineModel.fromJson(t))
-          .toList(),
+      timeline: finalTimeline,
       deliveryDetails: json['deliveryDetails'] != null
           ? DeliveryDetailsModel.fromJson(json['deliveryDetails'])
           : null,
     );
+  }
+
+  static List<TimelineModel> _buildDefaultTimeline({
+    required String status,
+    required DateTime createdAt,
+    String? ngoName,
+  }) {
+    final list = <TimelineModel>[
+      TimelineModel(
+        status: 'requested',
+        time: createdAt.toLocal(),
+        description: 'Donation created by donor',
+      ),
+    ];
+
+    final lowerStatus = status.toLowerCase();
+    if (lowerStatus == 'accepted' || lowerStatus == 'assigned' || lowerStatus == 'matched' || lowerStatus == 'picked_up' || lowerStatus == 'in_transit' || lowerStatus == 'completed') {
+      list.add(TimelineModel(
+        status: 'accepted',
+        time: createdAt.add(const Duration(minutes: 5)).toLocal(),
+        description: ngoName != null ? 'Accepted by $ngoName' : 'Accepted by NGO',
+      ));
+    }
+    if (lowerStatus == 'picked_up' || lowerStatus == 'in_transit' || lowerStatus == 'completed') {
+      list.add(TimelineModel(
+        status: 'picked_up',
+        time: createdAt.add(const Duration(minutes: 15)).toLocal(),
+        description: 'Food picked up by NGO volunteer',
+      ));
+    }
+    if (lowerStatus == 'completed') {
+      list.add(TimelineModel(
+        status: 'completed',
+        time: createdAt.add(const Duration(minutes: 30)).toLocal(),
+        description: 'Donation completed successfully',
+      ));
+    }
+    return list;
   }
 
   DonationModel copyWith({

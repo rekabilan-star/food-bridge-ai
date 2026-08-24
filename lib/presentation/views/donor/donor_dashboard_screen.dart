@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/donation_viewmodel.dart';
@@ -677,20 +678,53 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
   }
 
   Widget _buildDonationsList(List donations) {
+    final user = context.watch<AuthViewModel>().user;
+    final double userLat = user?.latitude ?? 0;
+    final double userLng = user?.longitude ?? 0;
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: donations.length > 5 ? 5 : donations.length,
       itemBuilder: (context, index) {
         final donation = donations[index];
-        final status = donation.status == 'waiting' ? 'Pending' : (donation.status == 'picked_up' ? 'Picked Up' : donation.status);
+        final status = StatusUtils.formatStatusLabel(donation.status);
+        
+        final double donorLat = donation.latitude != 0 ? donation.latitude : userLat;
+        final double donorLng = donation.longitude != 0 ? donation.longitude : userLng;
+        final double targetLat = donation.ngoLat ?? 0;
+        final double targetLng = donation.ngoLng ?? 0;
+
+        String distText = "Distance unavailable";
+        String etaVal = status == 'Pending' ? '15 mins' : '10 mins';
+
+        if (donorLat != 0 && donorLng != 0 && targetLat != 0 && targetLng != 0) {
+          final meters = Geolocator.distanceBetween(donorLat, donorLng, targetLat, targetLng);
+          distText = "${(meters / 1000).toStringAsFixed(1)} km away";
+          final mins = ((meters / 1000) / 30 * 60).round();
+          etaVal = "${mins > 0 ? mins : 5} mins";
+        } else if (donorLat != 0 && donorLng != 0) {
+          distText = "Pickup ready";
+        }
+
+        final diff = DateTime.now().difference(donation.preparedTime.toLocal());
+        String timeAgoVal = "Recently";
+        if (diff.inSeconds < 60) {
+          timeAgoVal = "Just now";
+        } else if (diff.inMinutes < 60) {
+          timeAgoVal = "${diff.inMinutes} mins ago";
+        } else if (diff.inHours < 24) {
+          timeAgoVal = "${diff.inHours} hrs ago";
+        }
+
         return DonationCard(
           title: donation.foodName,
           subtitle: "${donation.membersServed} Served • ${donation.checklist.foodType.isNotEmpty ? donation.checklist.foodType : (donation.category.isNotEmpty ? donation.category : 'Cooked Meal')}",
           status: status,
-          timeAgo: "Recently",
-          etaText: status == 'Pending' ? '14 mins' : '8 mins',
-          distanceText: '2.4 km away',
+          timeAgo: timeAgoVal,
+          etaText: etaVal,
+          distanceText: distText,
+          imageUrl: donation.imageUrl,
           onTrackTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
           },
