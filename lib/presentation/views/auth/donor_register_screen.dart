@@ -94,8 +94,10 @@ class _DonorRegisterScreenState extends State<DonorRegisterScreen> {
       if (success) {
         UIUtils.showSuccessDialog(
           context, 
-          "Success! Your account is active. Start saving food now.",
-          onOk: () => Navigator.pop(context),
+          "Success! Your account is active. Please log in to start saving food.",
+          onOk: () {
+            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          },
         );
       } else {
         UIUtils.showErrorDialog(context, context.read<AuthViewModel>().errorMessage ?? "Registration failed.");

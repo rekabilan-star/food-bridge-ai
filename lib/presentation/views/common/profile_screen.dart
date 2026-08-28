@@ -49,6 +49,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Rescue Impact Action Summary
             _buildImpactBanner(context).animate().fadeIn(delay: 150.ms),
 
+            const SizedBox(height: 24),
+
+            // Rescuer Badges & Achievements Section
+            _buildSectionHeader("RESCUER BADGES & ACHIEVEMENTS"),
+            _buildBadgesSection().animate().fadeIn(delay: 200.ms),
+
             const SizedBox(height: 28),
 
             // Account Settings Group
@@ -343,6 +349,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textSecondary),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    );
+  }
+
+  Widget _buildBadgesSection() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildBadgeChip("Zero Waste", Icons.eco_rounded, Colors.green, true),
+          _buildBadgeChip("Hero Donor", Icons.verified_user_rounded, AppColors.primary, true),
+          _buildBadgeChip("Top Rescuer", Icons.star_rounded, Colors.amber, true),
+          _buildBadgeChip("Master Saver", Icons.military_tech_rounded, Colors.purple, false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadgeChip(String label, IconData icon, Color color, bool unlocked) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: unlocked ? color.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: unlocked ? color.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.3)),
+          ),
+          child: Icon(icon, color: unlocked ? color : Colors.grey, size: 24),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: unlocked ? AppColors.textPrimary : Colors.grey,
+          ),
+        ),
+      ],
     );
   }
 }

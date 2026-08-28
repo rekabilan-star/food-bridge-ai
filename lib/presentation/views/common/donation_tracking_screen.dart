@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import 'chat_screen.dart';
@@ -130,7 +131,9 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeInOut,
                             width: 22,
                             height: 22,
                             decoration: BoxDecoration(
@@ -144,7 +147,9 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                           ),
                           if (!isLast)
                             Expanded(
-                              child: Container(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeInOut,
                                 height: 2.5,
                                 color: index < currentStep ? AppColors.primary : Colors.grey.shade200,
                               ),
@@ -212,7 +217,8 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.1),
@@ -224,9 +230,14 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                   children: [
                     Icon(isCompleted ? Icons.check_circle : Icons.circle, size: 12, color: statusColor),
                     const SizedBox(width: 8),
-                    Text(
-                      statusText,
-                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                      child: Text(
+                        statusText,
+                        key: ValueKey(statusText),
+                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
                     ),
                   ],
                 ),
@@ -248,9 +259,13 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                           donation.assignedNgoName ?? "Finding NGO Partner...",
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
-                        Text(
-                          distText,
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          child: Text(
+                            distText,
+                            key: ValueKey(distText),
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          ),
                         ),
                       ],
                     ),
@@ -283,7 +298,14 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("Estimated Time", style: TextStyle(color: Colors.grey, fontSize: 13)),
-                    Text(etaText, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700], fontSize: 13)),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Text(
+                        etaText,
+                        key: ValueKey(etaText),
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700], fontSize: 13),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -305,7 +327,7 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                       ),
                     ],
                   ),
-                ),
+                ).animate().fadeIn(duration: 400.ms).scale(begin: const Offset(0.96, 0.96), end: const Offset(1, 1), curve: Curves.easeOutBack),
                 const SizedBox(height: 12),
                 Row(
                   children: [

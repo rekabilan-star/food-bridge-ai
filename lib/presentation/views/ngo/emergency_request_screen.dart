@@ -24,6 +24,44 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   String _priority = 'High';
   DateTime _requiredBefore = DateTime.now().add(const Duration(hours: 3));
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+        locProvider.fetchLocation().then((_) {
+          _onLocationDetected();
+        });
+        locProvider.addListener(_onLocationDetected);
+      }
+    });
+  }
+
+  void _onLocationDetected() {
+    if (!mounted) return;
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    if (locProvider.location != null && !locProvider.isLoading) {
+      if (locProvider.location!.fullAddress.isNotEmpty && _addressController.text.trim().isEmpty) {
+        setState(() {
+          _addressController.text = locProvider.location!.fullAddress;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    try {
+      Provider.of<LocationProviderV2>(context, listen: false).removeListener(_onLocationDetected);
+    } catch (_) {}
+    _titleController.dispose();
+    _reasonController.dispose();
+    _membersController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
   void _submit() async {
     if (_formKey.currentState!.validate()) {
       final locProvider = context.read<LocationProviderV2>();
@@ -61,6 +99,8 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locProvider = context.watch<LocationProviderV2>();
+
     return Scaffold(
       appBar: AppBar(title: const Text("Emergency Request")),
       body: SingleChildScrollView(
@@ -117,7 +157,27 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _addressController,
-                decoration: const InputDecoration(labelText: "Delivery Address", prefixIcon: Icon(Icons.location_on_outlined)),
+                decoration: InputDecoration(
+                  labelText: "Delivery Address", 
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                  suffixIcon: locProvider.isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.my_location_rounded, color: Colors.red),
+                          tooltip: "Auto-detect Live GPS Location",
+                          onPressed: () async {
+                            await locProvider.fetchLocation();
+                            if (mounted && locProvider.location != null) {
+                              setState(() {
+                                _addressController.text = locProvider.location!.fullAddress;
+                              });
+                            }
+                          },
+                        ),
+                ),
                 validator: (v) => v!.isEmpty ? "Enter address" : null,
               ),
               const SizedBox(height: 24),

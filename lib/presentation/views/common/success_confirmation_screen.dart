@@ -78,7 +78,7 @@ class SuccessConfirmationScreen extends StatelessWidget {
                         Icons.check_rounded,
                         size: 48,
                         color: Colors.white,
-                      ),
+                      ).animate().scale(delay: 200.ms, duration: 400.ms, curve: Curves.easeOutBack),
                     ),
                   ],
                 ),

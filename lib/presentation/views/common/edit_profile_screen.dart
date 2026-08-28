@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/ui_utils.dart';
+import '../../../core/providers/location_provider_v2.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -27,10 +28,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: user.name);
     _phoneController = TextEditingController(text: user.phoneNumber);
     _addressController = TextEditingController(text: user.address);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+        locProvider.fetchLocation().then((_) {
+          _onLocationDetected();
+        });
+        locProvider.addListener(_onLocationDetected);
+      }
+    });
+  }
+
+  void _onLocationDetected() {
+    if (!mounted) return;
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    if (locProvider.location != null && !locProvider.isLoading) {
+      if (locProvider.location!.fullAddress.isNotEmpty && _addressController.text.trim().isEmpty) {
+        setState(() {
+          _addressController.text = locProvider.location!.fullAddress;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
+    try {
+      Provider.of<LocationProviderV2>(context, listen: false).removeListener(_onLocationDetected);
+    } catch (_) {}
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
@@ -48,9 +74,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _save() async {
     if (_formKey.currentState!.validate()) {
       final authVm = context.read<AuthViewModel>();
-      // In a real app, you would upload the image to Cloudinary first
-      // and then update the profile with the URL.
-      // For this improvement, we focus on the UI and API structure.
       
       final success = await authVm.updateProfile(
         name: _nameController.text.trim(),
@@ -72,6 +95,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().user!;
     final isLoading = context.watch<AuthViewModel>().isLoading;
+    final locProvider = context.watch<LocationProviderV2>();
 
     return Scaffold(
       appBar: AppBar(title: const Text("Edit Profile")),
@@ -124,7 +148,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _addressController,
-                decoration: const InputDecoration(labelText: "Address", prefixIcon: Icon(Icons.location_on_outlined)),
+                decoration: InputDecoration(
+                  labelText: "Address", 
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                  suffixIcon: locProvider.isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.my_location_rounded, color: AppColors.primary),
+                          tooltip: "Auto-detect Live GPS Location",
+                          onPressed: () async {
+                            await locProvider.fetchLocation();
+                            if (mounted && locProvider.location != null) {
+                              setState(() {
+                                _addressController.text = locProvider.location!.fullAddress;
+                              });
+                            }
+                          },
+                        ),
+                ),
                 maxLines: 2,
                 validator: (v) => v!.isEmpty ? "Required" : null,
               ),

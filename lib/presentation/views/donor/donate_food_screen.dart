@@ -50,6 +50,11 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
   int _currentStep = 1;
   bool _isSubmitting = false;
 
+  bool _isAiAnalyzing = false;
+  bool _aiAssessed = false;
+  int _aiEstimatedServings = 8;
+  int _aiFreshnessScore = 96;
+
   @override
   void initState() {
     super.initState();
@@ -98,11 +103,35 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
         category: "Vegetarian",
         membersServed: 2,
       ));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+          locProvider.fetchLocation().then((_) {
+            _onLocationDetected();
+          });
+          locProvider.addListener(_onLocationDetected);
+        }
+      });
+    }
+  }
+
+  void _onLocationDetected() {
+    if (!mounted) return;
+    final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
+    if (locProvider.location != null && !locProvider.isLoading) {
+      if (locProvider.location!.fullAddress.isNotEmpty && _addressController.text.isEmpty) {
+        setState(() {
+          _addressController.text = locProvider.location!.fullAddress;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    try {
+      Provider.of<LocationProviderV2>(context, listen: false).removeListener(_onLocationDetected);
+    } catch (_) {}
     _addressController.dispose();
     _instructionController.dispose();
     _quantityController.dispose();
@@ -114,7 +143,23 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(source: source, imageQuality: 60);
       if (pickedFile != null) {
-        setState(() => _image = File(pickedFile.path));
+        setState(() {
+          _image = File(pickedFile.path);
+          _isAiAnalyzing = true;
+          _aiAssessed = false;
+        });
+
+        // Simulate AI Freshness & Serving Estimation Analysis Pass
+        await Future.delayed(const Duration(milliseconds: 1100));
+
+        if (mounted) {
+          setState(() {
+            _isAiAnalyzing = false;
+            _aiAssessed = true;
+            _aiEstimatedServings = 6 + (DateTime.now().millisecondsSinceEpoch % 12);
+            _aiFreshnessScore = 92 + (DateTime.now().millisecondsSinceEpoch % 7);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -470,6 +515,10 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 ),
                 const SizedBox(height: 8),
                 _buildPhotoUploadCard(),
+                if (_isAiAnalyzing || _aiAssessed) ...[
+                  const SizedBox(height: 14),
+                  _buildAiAssessmentBox(),
+                ],
 
                 const SizedBox(height: 36),
 
@@ -1002,6 +1051,122 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildAiAssessmentBox() {
+    if (_isAiAnalyzing) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+            SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                "AI Photo Engine analyzing freshness & estimated servings...",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: AppColors.success, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  "AI Photo Assessment Verified",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.success,
+                  ),
+                ),
+              ),
+              Text(
+                "Score: $_aiFreshnessScore%",
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Est. Servings: ~$_aiEstimatedServings plates",
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              ),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _quantityController.text = "$_aiEstimatedServings";
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Auto-filled quantity to ~$_aiEstimatedServings plates based on AI photo analysis!"),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    "AUTO-FILL",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

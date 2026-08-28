@@ -183,8 +183,10 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                             vm.markAsRead(notification.id);
                             _handleNotificationTap(context, notification);
                           },
-                          onDelete: () => vm.deleteNotification(notification.id),
-                        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0),
+                          onDelete: () {
+                            vm.deleteNotification(notification.id);
+                          },
+                        ).animate().fadeIn(duration: 300.ms, delay: Duration(milliseconds: (index * 40).clamp(0, 250))).slideY(begin: 0.06, end: 0, duration: 300.ms, delay: Duration(milliseconds: (index * 40).clamp(0, 250)), curve: Curves.easeOut),
                       );
                     },
                     childCount: vm.notifications.length + (vm.hasMore ? 1 : 0),

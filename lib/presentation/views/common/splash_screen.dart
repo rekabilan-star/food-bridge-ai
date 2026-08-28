@@ -256,7 +256,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                 ),
-              ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
+              ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).fadeIn(duration: 400.ms),
 
               const SizedBox(height: 24),
 
@@ -269,7 +269,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                     ),
-              ).animate().fadeIn(delay: 200.ms),
+              ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideY(begin: 0.15, end: 0, duration: 400.ms, curve: Curves.easeOut),
 
               const SizedBox(height: 8),
 
@@ -281,7 +281,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
-              ).animate().fadeIn(delay: 300.ms),
+              ).animate().fadeIn(delay: 350.ms, duration: 400.ms).slideY(begin: 0.15, end: 0, duration: 400.ms, curve: Curves.easeOut),
 
               const Spacer(flex: 2),
 

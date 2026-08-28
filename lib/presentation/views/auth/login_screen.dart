@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 subtitle: const Text("Donate surplus food from restaurant, event, or home", style: TextStyle(fontSize: 12)),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const DonorRegisterScreen()),
                   );
@@ -216,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 subtitle: const Text("Rescue and distribute food to local communities", style: TextStyle(fontSize: 12)),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const NgoRegisterScreen()),
                   );
@@ -310,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
-                ),
+                ).animate().fadeIn(delay: 200.ms, duration: 350.ms),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailController,
@@ -344,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderSide: const BorderSide(color: AppColors.primary, width: 2),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(delay: 200.ms, duration: 350.ms).slideY(begin: 0.08, end: 0, duration: 350.ms, curve: Curves.easeOut),
 
                 const SizedBox(height: 20),
 
@@ -356,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
-                ),
+                ).animate().fadeIn(delay: 280.ms, duration: 350.ms),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passwordController,
@@ -402,7 +402,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderSide: const BorderSide(color: AppColors.primary, width: 2),
                     ),
                   ),
-                ),
+                ).animate().fadeIn(delay: 280.ms, duration: 350.ms).slideY(begin: 0.08, end: 0, duration: 350.ms, curve: Curves.easeOut),
 
                 const SizedBox(height: 12),
 
@@ -450,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ],
-                ),
+                ).animate().fadeIn(delay: 340.ms, duration: 350.ms),
 
                 const SizedBox(height: 32),
 
@@ -459,7 +459,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   text: "SIGN IN",
                   isLoading: authViewModel.isLoading,
                   onPressed: _loginWithEmail,
-                ),
+                ).animate().fadeIn(delay: 400.ms, duration: 350.ms).scale(begin: const Offset(0.97, 0.97), end: const Offset(1, 1), delay: 400.ms, duration: 350.ms, curve: Curves.easeOut),
 
                 const SizedBox(height: 20),
 

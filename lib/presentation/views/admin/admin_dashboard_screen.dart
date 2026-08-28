@@ -432,7 +432,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             trailing: _buildStatusTag(item['status'] ?? 'waiting'),
           ),
-        );
+        ).animate().fadeIn(duration: 300.ms, delay: Duration(milliseconds: (index * 50).clamp(0, 250))).slideY(begin: 0.08, end: 0, duration: 300.ms, delay: Duration(milliseconds: (index * 50).clamp(0, 250)), curve: Curves.easeOut);
       },
     );
   }

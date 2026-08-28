@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/theme/app_colors.dart';
 import 'donation_details_screen.dart';
 
 class NgoDonationRequestsScreen extends StatefulWidget {
@@ -79,7 +83,7 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
                     padding: const EdgeInsets.all(20),
                     itemCount: viewModel.donations.length,
                     itemBuilder: (context, index) {
-                      return _buildRequestCard(viewModel.donations[index]);
+                      return _buildRequestCard(viewModel.donations[index]).animate().fadeIn(duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300))).slideY(begin: 0.08, end: 0, duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300)), curve: Curves.easeOut);
                     },
                   );
                 },
@@ -130,6 +134,15 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
     final resolvedUrl = _resolveFoodImageUrl(rawUrl);
     final isLocalFile = rawUrl.isNotEmpty && File(rawUrl).existsSync();
 
+    final user = context.watch<AuthViewModel>().user;
+    final double userLat = user?.latitude ?? 0;
+    final double userLng = user?.longitude ?? 0;
+    String distBadge = "WITHIN 20 KM";
+    if (userLat != 0 && userLng != 0 && donation.latitude != 0 && donation.longitude != 0) {
+      final meters = Geolocator.distanceBetween(userLat, userLng, donation.latitude, donation.longitude);
+      distBadge = "${(meters / 1000).toStringAsFixed(1)} KM AWAY";
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
@@ -179,7 +192,11 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
                               decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
                               child: const Text("98% AI Score", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
                             ),
-                            const Text("NEARBY", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: AppColors.ngoColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                              child: Text(distBadge, style: const TextStyle(color: AppColors.ngoColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -206,9 +223,55 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                onPressed: () => _acceptDonationDirectly(donation),
+                icon: const Icon(Icons.check_circle_rounded, size: 18),
+                label: const Text("ACCEPT DONATION", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.ngoColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _acceptDonationDirectly(DonationModel donation) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Accept Donation?"),
+        content: Text("Accept '${donation.foodName}' and add it to your Rescue Control dashboard?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final viewModel = context.read<DonationViewModel>();
+              final success = await viewModel.updateDonationStatus(donation.id, 'accepted');
+              if (!mounted) return;
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Donation Accepted! Navigating to Rescue Control..."))
+                );
+                Navigator.pushNamedAndRemoveUntil(context, '/ngo-dashboard', (route) => false);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(viewModel.errorMessage ?? "Failed to accept donation"))
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),
+            child: const Text("ACCEPT & GO TO DASHBOARD"),
+          ),
+        ],
       ),
     );
   }

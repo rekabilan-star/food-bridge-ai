@@ -390,7 +390,7 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
           onTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
           },
-        );
+        ).animate().fadeIn(duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300))).slideY(begin: 0.08, end: 0, duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300)), curve: Curves.easeOut);
       },
     );
   }

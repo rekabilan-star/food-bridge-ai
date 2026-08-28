@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/utils/api_service.dart';
 import '../../../core/theme/app_colors.dart';
+import 'widgets/impact_certificate_dialog.dart';
 
 class ImpactAnalyticsScreen extends StatefulWidget {
   const ImpactAnalyticsScreen({super.key});
@@ -45,6 +46,19 @@ class _ImpactAnalyticsScreenState extends State<ImpactAnalyticsScreen> {
     }
   }
 
+  void _showCertificate(BuildContext context) {
+    final user = context.read<AuthViewModel>().user;
+    ImpactCertificateDialog.show(
+      context,
+      userName: user?.name ?? "Food Rescuer",
+      userRole: user?.role.toString().split('.').last ?? "Donor",
+      totalKg: _data['totalWeightSaved']?.toDouble() ?? 45.0,
+      mealsProvided: _data['mealsProvided'] ?? 340,
+      co2Reduced: _data['co2Reduction']?.toDouble() ?? 288.4,
+      waterSaved: (_data['waterSaved']?.toDouble() ?? 1420.0).toInt(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().user;
@@ -58,7 +72,7 @@ class _ImpactAnalyticsScreenState extends State<ImpactAnalyticsScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            _buildAppBar(isNGO, primaryColor),
+            _buildAppBar(context, isNGO, primaryColor),
             _isLoading 
               ? const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
               : SliverToBoxAdapter(
@@ -96,7 +110,7 @@ class _ImpactAnalyticsScreenState extends State<ImpactAnalyticsScreen> {
     );
   }
 
-  Widget _buildAppBar(bool isNGO, Color color) {
+  Widget _buildAppBar(BuildContext context, bool isNGO, Color color) {
     return SliverAppBar(
       floating: true,
       pinned: true,
@@ -107,6 +121,11 @@ class _ImpactAnalyticsScreenState extends State<ImpactAnalyticsScreen> {
       title: Text(isNGO ? 'Rescue Intel' : 'Impact Analytics', 
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: -0.5)),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.workspace_premium_rounded, color: AppColors.primary, size: 24),
+          tooltip: "Download Impact Certificate",
+          onPressed: () => _showCertificate(context),
+        ),
         IconButton(icon: const Icon(Icons.refresh_rounded, size: 22), onPressed: _fetchData),
         const SizedBox(width: 8),
       ],
@@ -155,18 +174,45 @@ class _ImpactAnalyticsScreenState extends State<ImpactAnalyticsScreen> {
             style: const TextStyle(
                 color: Colors.white, fontSize: 56, fontWeight: FontWeight.w900, letterSpacing: -2),
           ),
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]
-            ),
-            child: Text(
-              isNGO ? 'ELITE RESCUER STATUS' : 'COMMUNITY HERO STATUS',
-              style: TextStyle(color: primaryColor, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),
-            ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]
+                ),
+                child: Text(
+                  isNGO ? 'ELITE RESCUER STATUS' : 'COMMUNITY HERO STATUS',
+                  style: TextStyle(color: primaryColor, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              InkWell(
+                onTap: () => _showCertificate(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'CERTIFICATE',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
