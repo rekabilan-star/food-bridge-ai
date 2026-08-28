@@ -171,11 +171,19 @@ io.on('connection', (socket) => {
     const { donationId, latitude, longitude } = data;
     socket.to(`delivery_${donationId}`).emit('location_update', { ...data, volunteerId: userId, timestamp: new Date() });
 
-    await User.findByIdAndUpdate(userId, {
+    const updateFields = {
       currentLatitude: latitude,
       currentLongitude: longitude,
       lastLocationUpdate: new Date()
-    });
+    };
+    if (latitude && longitude) {
+      updateFields.location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
+
+    await User.findByIdAndUpdate(userId, updateFields);
   });
 
   socket.on('disconnect', () => {

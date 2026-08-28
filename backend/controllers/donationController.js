@@ -4,6 +4,7 @@ const { recommendNgos } = require('../services/aiMatchingService');
 const { optimizeRoute } = require('../services/routeOptimizationService');
 const { notify } = require('../services/notificationService');
 const sms = require('../services/smsService');
+const geolib = require('geolib');
 
 // @desc    Get optimized route for volunteer
 // @route   GET /api/donations/volunteer/route
@@ -82,9 +83,45 @@ exports.createDonation = async (req, res, next) => {
 
     const donation = await Donation.create(req.body);
 
-    // Trigger: Donation Created - Notify all NGOs in area
-    const ngos = await User.find({ role: 'ngo', status: 'approved' });
-    ngos.forEach(ngo => {
+    // Trigger: Find approved NGOs strictly within 20 KM (20,000 meters)
+    let eligibleNgos = [];
+    if (donation.latitude && donation.longitude) {
+      try {
+        eligibleNgos = await User.aggregate([
+          {
+            $geoNear: {
+              near: {
+                type: 'Point',
+                coordinates: [parseFloat(donation.longitude), parseFloat(donation.latitude)]
+              },
+              distanceField: 'distance',
+              maxDistance: 20000, // 20 km in meters (boundary <= 20 KM)
+              query: {
+                role: 'ngo',
+                status: 'approved'
+              },
+              spherical: true
+            }
+          }
+        ]);
+      } catch (geoErr) {
+        console.error('GeoNear query error on createDonation, falling back to geolib filter:', geoErr);
+        const allApprovedNgos = await User.find({ role: 'ngo', status: 'approved' });
+        eligibleNgos = allApprovedNgos.filter(ngo => {
+          const ngoLat = ngo.currentLatitude || ngo.latitude;
+          const ngoLng = ngo.currentLongitude || ngo.longitude;
+          if (!ngoLat || !ngoLng || (ngoLat === 0 && ngoLng === 0)) return false;
+          const dist = geolib.getDistance(
+            { latitude: donation.latitude, longitude: donation.longitude },
+            { latitude: ngoLat, longitude: ngoLng }
+          );
+          return dist <= 20000;
+        });
+      }
+    }
+
+    // Notify only eligible approved NGOs within 20 KM
+    eligibleNgos.forEach(ngo => {
       notify({
         userId: ngo._id,
         title: 'New Donation Available 🥗',
@@ -93,11 +130,19 @@ exports.createDonation = async (req, res, next) => {
         priority: 'high',
         data: { donationId: donation._id.toString() }
       });
+
+      if (global.io) {
+        global.io.to(ngo._id.toString()).emit('new_donation', donation);
+      }
     });
 
-    if (global.io) {
-      global.io.emit('new_donation', donation);
-    }
+    // Also notify admins for real-time monitoring without broad global emit
+    const admins = await User.find({ role: 'admin' }).select('_id');
+    admins.forEach(admin => {
+      if (global.io) {
+        global.io.to(admin._id.toString()).emit('new_donation', donation);
+      }
+    });
 
     res.status(201).json({ success: true, donation });
   } catch (err) {
@@ -193,9 +238,9 @@ exports.getDonorDonations = async (req, res, next) => {
   }
 };
 
-// @desc    Get all available donations
+// @desc    Get all available donations within 20 KM
 // @route   GET /api/donations
-// @access  Private (NGO)
+// @access  Private (NGO/Admin)
 exports.getAvailableDonations = async (req, res, next) => {
   try {
     const { search } = req.query;
@@ -206,6 +251,59 @@ exports.getAvailableDonations = async (req, res, next) => {
         { foodName: { $regex: search, $options: 'i' } },
         { 'items.foodName': { $regex: search, $options: 'i' } }
       ];
+    }
+
+    // Admins have access to all waiting donations across the platform
+    if (req.user.role === 'admin') {
+      const donations = await Donation.find(query).populate('donorId', 'name phoneNumber').sort('-createdAt');
+      return res.status(200).json({ success: true, count: donations.length, donations });
+    }
+
+    // For NGOs: Must be approved to view available surplus donations
+    if (req.user.role === 'ngo') {
+      if (req.user.status !== 'approved') {
+        return res.status(200).json({ success: true, count: 0, donations: [] });
+      }
+
+      // Resolve trusted NGO location
+      const ngoLat = req.user.currentLatitude || req.user.latitude;
+      const ngoLng = req.user.currentLongitude || req.user.longitude;
+
+      if (!ngoLat || !ngoLng || (ngoLat === 0 && ngoLng === 0)) {
+        return res.status(200).json({ success: true, count: 0, donations: [] });
+      }
+
+      // Geospatial $near query on Donation.location (max 20,000m)
+      try {
+        const geoQuery = {
+          ...query,
+          location: {
+            $near: {
+              $geometry: {
+                type: 'Point',
+                coordinates: [parseFloat(ngoLng), parseFloat(ngoLat)]
+              },
+              $maxDistance: 20000 // 20 km in meters (boundary <= 20 KM)
+            }
+          }
+        };
+
+        const donations = await Donation.find(geoQuery).populate('donorId', 'name phoneNumber');
+        return res.status(200).json({ success: true, count: donations.length, donations });
+      } catch (geoErr) {
+        console.error('Geo query error in getAvailableDonations, falling back to geolib distance filter:', geoErr);
+        const allDonations = await Donation.find(query).populate('donorId', 'name phoneNumber').sort('-createdAt');
+        const filteredDonations = allDonations.filter(d => {
+          if (!d.latitude || !d.longitude || (d.latitude === 0 && d.longitude === 0)) return false;
+          const dist = geolib.getDistance(
+            { latitude: d.latitude, longitude: d.longitude },
+            { latitude: ngoLat, longitude: ngoLng }
+          );
+          return dist <= 20000;
+        });
+
+        return res.status(200).json({ success: true, count: filteredDonations.length, donations: filteredDonations });
+      }
     }
 
     const donations = await Donation.find(query).populate('donorId', 'name phoneNumber').sort('-createdAt');
@@ -229,13 +327,68 @@ exports.updateDonationStatus = async (req, res, next) => {
 
     // Authorization checks
     if (status === 'accepted') {
-      if (donation.status !== 'waiting') {
-        return res.status(400).json({ success: false, message: 'Donation already accepted or processed' });
-      }
       if (req.user.role !== 'ngo') {
         return res.status(403).json({ success: false, message: 'Only NGOs can accept donations' });
       }
-      donation.assignedNgoId = req.user.id;
+      if (req.user.status !== 'approved') {
+        return res.status(403).json({ success: false, message: 'Only approved NGOs can accept donations' });
+      }
+      if (donation.status !== 'waiting') {
+        return res.status(400).json({ success: false, message: 'Donation already accepted or processed' });
+      }
+
+      // Strict Geographic Range Authorization (0 < distance <= 20 KM)
+      const ngoLat = req.user.currentLatitude || req.user.latitude;
+      const ngoLng = req.user.currentLongitude || req.user.longitude;
+      const donLat = donation.latitude;
+      const donLng = donation.longitude;
+
+      if (!ngoLat || !ngoLng || !donLat || !donLng || (ngoLat === 0 && ngoLng === 0) || (donLat === 0 && donLng === 0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Valid geographic location coordinates required to verify 20 KM operating distance'
+        });
+      }
+
+      const distanceMeters = geolib.getDistance(
+        { latitude: donLat, longitude: donLng },
+        { latitude: ngoLat, longitude: ngoLng }
+      );
+      const distanceKm = distanceMeters / 1000;
+
+      if (distanceKm > 20) {
+        return res.status(403).json({
+          success: false,
+          message: `Donation is outside your 20 KM operating range (${distanceKm.toFixed(1)} KM away)`
+        });
+      }
+
+      // Atomic Acceptance Update to prevent race conditions
+      const updatedDonation = await Donation.findOneAndUpdate(
+        { _id: req.params.id, status: 'waiting' },
+        {
+          $set: {
+            status: 'accepted',
+            assignedNgoId: req.user.id
+          },
+          $push: {
+            timeline: {
+              status: 'accepted',
+              description: description || `Donation accepted by ${req.user.name}`,
+              time: Date.now()
+            }
+          }
+        },
+        { new: true }
+      ).populate('donorId', 'name phoneNumber');
+
+      if (!updatedDonation) {
+        return res.status(400).json({
+          success: false,
+          message: 'Donation is no longer available or was already accepted'
+        });
+      }
+      donation = updatedDonation;
     } else {
       // For any other status update, user must be either the donor, assigned NGO, or admin
       const isDonor = donation.donorId.toString() === req.user.id;
@@ -245,19 +398,17 @@ exports.updateDonationStatus = async (req, res, next) => {
       if (!isDonor && !isAssignedNgo && !isVolunteer && req.user.role !== 'admin') {
         return res.status(403).json({ success: false, message: 'Not authorized to update status for this donation' });
       }
+
+      donation.status = status;
+      donation.timeline.push({
+        status,
+        description: description || `Food Rescue: Status updated to ${status.toUpperCase().replace(/_/g, ' ')}`,
+        time: Date.now(),
+      });
+
+      await donation.save();
+      donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber');
     }
-
-    donation.status = status;
-    donation.timeline.push({
-      status,
-      description: description || `Food Rescue: Status updated to ${status.toUpperCase().replace(/_/g, ' ')}`,
-      time: Date.now(),
-    });
-
-    await donation.save();
-
-    // Refresh donation with donor details for notification
-    donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber');
 
     // Notify via Socket.IO for real-time tracking (both to donor room and broadcast)
     if (global.io) {
@@ -468,13 +619,21 @@ exports.updateLocation = async (req, res, next) => {
   try {
     const { latitude, longitude } = req.body;
 
+    const updateFields = {
+      currentLatitude: latitude,
+      currentLongitude: longitude,
+      lastLocationUpdate: Date.now(),
+    };
+    if (latitude && longitude) {
+      updateFields.location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+      };
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      {
-        currentLatitude: latitude,
-        currentLongitude: longitude,
-        lastLocationUpdate: Date.now(),
-      },
+      updateFields,
       { new: true }
     );
 
@@ -680,6 +839,28 @@ exports.getDonation = async (req, res, next) => {
 
     if (!donation) {
         return res.status(404).json({ success: false, message: 'Donation not found' });
+    }
+
+    // Access control: If donation is in 'waiting' status and accessed by an NGO, enforce 20 KM rule and approval
+    if (donation.status === 'waiting' && req.user.role === 'ngo') {
+      if (req.user.status !== 'approved') {
+        return res.status(403).json({ success: false, message: 'Only approved NGOs can view available donations' });
+      }
+
+      const ngoLat = req.user.currentLatitude || req.user.latitude;
+      const ngoLng = req.user.currentLongitude || req.user.longitude;
+      if (ngoLat && ngoLng && donation.latitude && donation.longitude) {
+        const distMeters = geolib.getDistance(
+          { latitude: donation.latitude, longitude: donation.longitude },
+          { latitude: ngoLat, longitude: ngoLng }
+        );
+        if (distMeters > 20000) {
+          return res.status(403).json({
+            success: false,
+            message: `Donation is outside your 20 KM operating range (${(distMeters / 1000).toFixed(1)} KM away)`
+          });
+        }
+      }
     }
 
     res.status(200).json({ success: true, data: donation });

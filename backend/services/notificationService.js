@@ -57,9 +57,33 @@ exports.checkExpiringDonations = async () => {
         });
 
         for (const donation of expiringSoon) {
-            // Notify all NGOs
-            const ngos = await User.find({ role: 'ngo', status: 'approved' });
-            for (const ngo of ngos) {
+            // Notify only approved NGOs within 20 KM
+            let eligibleNgos = [];
+            if (donation.latitude && donation.longitude) {
+                try {
+                    eligibleNgos = await User.aggregate([
+                        {
+                            $geoNear: {
+                                near: {
+                                    type: "Point",
+                                    coordinates: [parseFloat(donation.longitude), parseFloat(donation.latitude)]
+                                },
+                                distanceField: "distance",
+                                maxDistance: 20000, // 20 km in meters (boundary <= 20 KM)
+                                query: {
+                                    role: 'ngo',
+                                    status: 'approved'
+                                },
+                                spherical: true
+                            }
+                        }
+                    ]);
+                } catch (geoErr) {
+                    console.error('Geo query error in checkExpiringDonations:', geoErr);
+                }
+            }
+
+            for (const ngo of eligibleNgos) {
                 await this.notify({
                     userId: ngo._id,
                     title: 'Urgent: Food Expiring Soon! ⏰',

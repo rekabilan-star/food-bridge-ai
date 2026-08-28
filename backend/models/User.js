@@ -114,11 +114,13 @@ const UserSchema = new mongoose.Schema({
 UserSchema.index({ location: '2dsphere' });
 
 UserSchema.pre('save', async function (next) {
-  if (this.isModified('latitude') || this.isModified('longitude')) {
-    if (this.latitude && this.longitude) {
+  if (this.isModified('latitude') || this.isModified('longitude') || this.isModified('currentLatitude') || this.isModified('currentLongitude')) {
+    const lat = this.currentLatitude || this.latitude;
+    const lng = this.currentLongitude || this.longitude;
+    if (lat && lng) {
       this.location = {
         type: 'Point',
-        coordinates: [this.longitude, this.latitude],
+        coordinates: [lng, lat],
       };
     }
   }
