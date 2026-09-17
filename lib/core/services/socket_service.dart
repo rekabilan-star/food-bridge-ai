@@ -115,6 +115,15 @@ class SocketService {
     });
   }
 
+  void onNewDonation(Function(Map<String, dynamic>) callback) {
+    socket.off('new_donation');
+    socket.on('new_donation', (data) {
+      if (data is Map<String, dynamic>) {
+        callback(data);
+      }
+    });
+  }
+
   void onUnreadCountUpdate(Function(Map<String, dynamic>) callback) {
     socket.off('unread_count_update');
     socket.on('unread_count_update', (data) {

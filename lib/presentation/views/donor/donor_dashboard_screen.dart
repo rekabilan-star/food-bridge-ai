@@ -12,6 +12,7 @@ import '../../../core/utils/ui_utils.dart';
 import 'donate_food_screen.dart';
 import 'qr_display_screen.dart';
 import '../common/donation_tracking_screen.dart';
+import '../common/verification_scanner_screen.dart';
 import '../common/donation_history_screen.dart';
 import '../common/profile_screen.dart';
 import '../common/widgets/stat_card.dart';
@@ -50,6 +51,7 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     final eVM = context.read<EmergencyViewModel>();
     final nVM = context.read<NotificationViewModel>();
 
+    dVM.initSocket();
     nVM.initSocketListeners();
     await Future.wait([
       dVM.fetchDonorDonations(),
@@ -263,6 +265,11 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                 ),
               ),
           ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.qr_code_scanner_rounded, size: 22, color: AppColors.textPrimary),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScannerScreen())),
+          tooltip: "Verify Certificate",
         ),
         const SizedBox(width: 4),
         IconButton(

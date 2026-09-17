@@ -234,6 +234,8 @@ class AuthViewModel extends ChangeNotifier {
     required String regNumber,
     required String certificateUrl,
     required String idProofUrl,
+    List<String>? acceptedCategories,
+    int? maxDailyMeals,
   }) async {
     _setLoading(true);
     _errorMessage = null;
@@ -269,6 +271,8 @@ class AuthViewModel extends ChangeNotifier {
         'ngoIdProofUrl': finalIdUrl,
         'role': 'ngo',
         'status': 'pending',
+        'acceptedCategories': acceptedCategories ?? [],
+        'maxDailyMeals': maxDailyMeals ?? 0,
       });
       _user = null;
       _setLoading(false);

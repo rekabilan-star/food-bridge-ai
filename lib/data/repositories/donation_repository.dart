@@ -217,4 +217,22 @@ class DonationRepository {
       throw e.error ?? "Failed to delete donation";
     }
   }
+
+  Future<Map<String, dynamic>> getDonationRoute(String id) async {
+    try {
+      final response = await _apiService.dio.get('donations/$id/route');
+      return response.data;
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to fetch route";
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyRescueQr(String qrCode) async {
+    try {
+      final response = await _apiService.dio.get('donations/verify/$qrCode');
+      return response.data;
+    } on DioException catch (e) {
+      throw e.error ?? "Invalid Verification Code";
+    }
+  }
 }

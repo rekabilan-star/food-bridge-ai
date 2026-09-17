@@ -6,6 +6,7 @@ import '../../viewmodels/live_map_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../core/utils/intent_utils.dart';
+import '../../../core/theme/app_colors.dart';
 
 class LiveTrackingMapScreen extends StatefulWidget {
   final DonationModel donation;
@@ -70,6 +71,18 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.example.mca_app',
                     ),
+                    if (model.routePoints.isNotEmpty)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: model.routePoints,
+                            strokeWidth: 4.5,
+                            color: AppColors.primary,
+                            borderStrokeWidth: 2,
+                            borderColor: Colors.white,
+                          ),
+                        ],
+                      ),
                     MarkerLayer(
                       markers: [
                         Marker(
@@ -130,8 +143,27 @@ class _LiveTrackingMapScreenState extends State<LiveTrackingMapScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(model.eta, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)),
-                    const Text('ETA', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    if (model.isLoadingRoute)
+                      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    else ...[
+                      Text(
+                        model.routePoints.isNotEmpty 
+                          ? '${model.routeDurationMins}m' 
+                          : model.eta, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 18)
+                      ),
+                      Text(
+                        model.routePoints.isNotEmpty 
+                          ? '${model.routeDistanceKm.toStringAsFixed(1)}km' 
+                          : 'ETA', 
+                        style: const TextStyle(fontSize: 10, color: Colors.grey)
+                      ),
+                      if (model.routePoints.isNotEmpty)
+                        Text(
+                          model.routingSource == "OSRM" ? "Road Route" : "Estimated",
+                          style: TextStyle(fontSize: 8, color: Colors.grey[400], fontWeight: FontWeight.bold),
+                        ),
+                    ],
                   ],
                 ),
               ],

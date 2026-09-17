@@ -21,6 +21,16 @@ exports.updateProfile = async (req, res, next) => {
       currentLongitude: req.body.currentLongitude
     };
 
+    // NGO Specific fields
+    if (req.user.role === 'ngo' || req.user.role === 'admin') {
+      if (req.body.acceptedCategories !== undefined) {
+        fieldsToUpdate.acceptedCategories = req.body.acceptedCategories;
+      }
+      if (req.body.maxDailyMeals !== undefined) {
+        fieldsToUpdate.maxDailyMeals = req.body.maxDailyMeals;
+      }
+    }
+
     // Remove undefined fields
     Object.keys(fieldsToUpdate).forEach(key => fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]);
 

@@ -78,6 +78,14 @@ const UserSchema = new mongoose.Schema({
   ngoRegistrationNumber: String,
   ngoCertificateUrl: String,
   ngoIdProofUrl: String,
+  acceptedCategories: {
+    type: [String],
+    default: [],
+  },
+  maxDailyMeals: {
+    type: Number,
+    default: 0,
+  },
 
   // Feature 5: NGO Availability
   availabilityStatus: {

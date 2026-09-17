@@ -2,6 +2,7 @@ const Donation = require('../models/Donation');
 const User = require('../models/User');
 const { recommendNgos } = require('../services/aiMatchingService');
 const { optimizeRoute } = require('../services/routeOptimizationService');
+const osrmService = require('../services/osrmService');
 const { notify } = require('../services/notificationService');
 const sms = require('../services/smsService');
 const geolib = require('geolib');
@@ -864,6 +865,94 @@ exports.getDonation = async (req, res, next) => {
     }
 
     res.status(200).json({ success: true, data: donation });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Verify QR Code and get details (Public/Protected)
+// @route   GET /api/donations/verify/:qrCode
+// @access  Public
+exports.verifyQrDetails = async (req, res, next) => {
+  try {
+    const donation = await Donation.findOne({ qrCode: req.params.qrCode })
+        .populate('donorId', 'name profileImage averageRating')
+        .populate('assignedNgoId', 'name profileImage averageRating');
+
+    if (!donation) {
+        return res.status(404).json({ success: false, message: 'Invalid Verification Code' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: donation._id,
+        foodName: donation.foodName,
+        donorName: donation.donorId?.name,
+        ngoName: donation.assignedNgoId?.name,
+        status: donation.status,
+        completedAt: donation.deliveryDetails?.completedAt,
+        impact: {
+          meals: donation.deliveryDetails?.membersServed || donation.membersServed,
+          weight: (donation.deliveryDetails?.membersServed || donation.membersServed) * 0.5
+        },
+        timeline: donation.timeline
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get road-aware route for donation tracking
+// @route   GET /api/donations/:id/route
+// @access  Private
+exports.getDonationRoute = async (req, res, next) => {
+  try {
+    const donation = await Donation.findById(req.params.id);
+
+    if (!donation) {
+      return res.status(404).json({ success: false, message: 'Donation not found' });
+    }
+
+    // Authorization: Donor, Assigned NGO, Volunteer, or Admin
+    const isDonor = donation.donorId.toString() === req.user.id;
+    const isNgo = donation.assignedNgoId && donation.assignedNgoId.toString() === req.user.id;
+    const isVolunteer = donation.volunteerId && donation.volunteerId.toString() === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isDonor && !isNgo && !isVolunteer && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to access this route' });
+    }
+
+    // Determine Origin (NGO/Volunteer Current Location)
+    const activeUser = await User.findById(donation.assignedNgoId || donation.volunteerId || req.user.id);
+    const origin = {
+      latitude: activeUser.currentLatitude || activeUser.latitude,
+      longitude: activeUser.currentLongitude || activeUser.longitude
+    };
+
+    // Determine Destination based on status
+    let destination;
+    if (['accepted', 'on_the_way', 'arrived'].includes(donation.status)) {
+      // Heading to Pickup (Donor)
+      destination = {
+        latitude: donation.latitude,
+        longitude: donation.longitude
+      };
+    } else if (donation.status === 'picked_up') {
+      // Heading to Delivery (Distribution Point)
+      destination = {
+        latitude: donation.deliveryDetails?.location?.latitude || donation.latitude,
+        longitude: donation.deliveryDetails?.location?.longitude || donation.longitude
+      };
+    } else {
+      return res.status(400).json({ success: false, message: 'No active tracking for this donation status' });
+    }
+
+    const routeData = await osrmService.getRoute(origin, destination);
+
+    res.status(200).json(routeData);
   } catch (err) {
     next(err);
   }

@@ -8,6 +8,7 @@ import '../../viewmodels/notification_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
 import 'ngo_donation_requests_screen.dart';
 import 'ngo_tracking_screen.dart';
+import '../common/verification_scanner_screen.dart';
 import 'donation_details_screen.dart';
 import 'emergency_request_screen.dart';
 import '../../../data/models/donation_model.dart';
@@ -41,6 +42,7 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
     final eVM = context.read<EmergencyViewModel>();
     final nVM = context.read<NotificationViewModel>();
 
+    dVM.initSocket();
     nVM.initSocketListeners();
     await Future.wait([
       dVM.fetchNgoAssignedDonations(),
@@ -171,6 +173,11 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
                 ),
               ),
           ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.qr_code_scanner_rounded, size: 22, color: AppColors.textPrimary),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScannerScreen())),
+          tooltip: "Verify Certificate",
         ),
         IconButton(
           icon: const Icon(Icons.chat_bubble_outline_rounded, size: 22, color: AppColors.textPrimary),

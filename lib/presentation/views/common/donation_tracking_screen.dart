@@ -8,7 +8,7 @@ import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import 'chat_screen.dart';
 import 'rating_screen.dart';
-import '../../../core/utils/receipt_service.dart';
+import '../../../core/utils/impact_certificate_service.dart';
 import '../../../core/utils/intent_utils.dart';
 import '../../../core/utils/ui_utils.dart';
 import '../../../core/theme/app_colors.dart';
@@ -333,9 +333,9 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => ReceiptService.generateAndPrintReceipt(donation),
-                        icon: const Icon(Icons.file_download_outlined, size: 18),
-                        label: const Text("RECEIPT"),
+                        onPressed: () => ImpactCertificateService.generateAndDisplay(donation),
+                        icon: const Icon(Icons.verified_rounded, size: 18),
+                        label: const Text("CERTIFICATE"),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),

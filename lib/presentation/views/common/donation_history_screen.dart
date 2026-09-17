@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import 'donation_tracking_screen.dart';
 import 'widgets/custom_app_bar.dart';
 import 'widgets/donation_card.dart';
 import 'widgets/modern_text_field.dart';
@@ -113,8 +114,11 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
                               timeAgo: timeAgoVal,
                               imageUrl: donation.imageUrl,
                               onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text("Selected donation: ${donation.foodName}")),
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => DonationTrackingScreen(donationId: donation.id),
+                                  ),
                                 );
                               },
                             ).animate().fadeIn(delay: (index * 80).ms).slideY(begin: 0.1, end: 0);

@@ -22,6 +22,8 @@ class UserModel {
   final String? availabilityStatus; // Available, Busy, Offline
   final double averageRating;
   final int totalRatings;
+  final List<String> acceptedCategories;
+  final int maxDailyMeals;
 
   UserModel({
     required this.id,
@@ -41,6 +43,8 @@ class UserModel {
     this.availabilityStatus,
     this.averageRating = 0.0,
     this.totalRatings = 0,
+    this.acceptedCategories = const [],
+    this.maxDailyMeals = 0,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -65,6 +69,8 @@ class UserModel {
       availabilityStatus: json['availabilityStatus'],
       averageRating: (json['averageRating'] ?? 0.0).toDouble(),
       totalRatings: json['totalRatings'] ?? 0,
+      acceptedCategories: (json['acceptedCategories'] as List? ?? []).map((e) => e.toString()).toList(),
+      maxDailyMeals: json['maxDailyMeals'] ?? 0,
     );
   }
 
@@ -87,6 +93,8 @@ class UserModel {
       'availabilityStatus': availabilityStatus,
       'averageRating': averageRating,
       'totalRatings': totalRatings,
+      'acceptedCategories': acceptedCategories,
+      'maxDailyMeals': maxDailyMeals,
     };
   }
 }

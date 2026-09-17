@@ -146,13 +146,14 @@ class AdminViewModel extends ChangeNotifier {
     return true;
   }
 
-  Future<void> sendAnnouncement(String title, String body) async {
+  Future<void> sendAnnouncement(String title, String body, {String targetRole = 'all'}) async {
     _setLoading(true);
     try {
-        await _repository.sendAnnouncement(title, body);
+        await _repository.sendAnnouncement(title, body, targetRole: targetRole);
         _errorMessage = null;
     } catch (e) {
         _errorMessage = e.toString();
+        rethrow;
     }
     _setLoading(false);
   }

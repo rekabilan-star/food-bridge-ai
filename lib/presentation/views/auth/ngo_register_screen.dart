@@ -30,8 +30,10 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _regNumberController = TextEditingController();
+  final _maxMealsController = TextEditingController(text: '50');
 
   String _selectedIdType = 'Aadhaar Card';
+  final List<String> _acceptedCategories = ['Cooked Meal'];
 
   File? _idFile;
 
@@ -179,6 +181,8 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
         regNumber: _selectedIdType,
         certificateUrl: _idFile!.path,
         idProofUrl: _idFile!.path,
+        acceptedCategories: _acceptedCategories,
+        maxDailyMeals: int.tryParse(_maxMealsController.text) ?? 0,
       );
 
       if (!mounted) return;
@@ -335,6 +339,51 @@ class _NgoRegisterScreenState extends State<NgoRegisterScreen> {
                       prefixIcon: Icons.location_on_outlined,
                       maxLines: 2,
                       validator: (v) => Validators.validateRequired(v, "Address"),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    _buildSectionHeader("OPERATIONAL CAPACITY"),
+                    ModernTextField(
+                      controller: _maxMealsController,
+                      label: "Max Daily Meal Capacity",
+                      prefixIcon: Icons.restaurant_menu_rounded,
+                      keyboardType: TextInputType.number,
+                      validator: (v) => Validators.validateRequired(v, "Daily Capacity"),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      "Accepted Food Categories",
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 0,
+                      children: [
+                        'Cooked Meal',
+                        'Bakery Items',
+                        'Raw Materials',
+                        'Fruits/Veggies',
+                        'Other'
+                      ].map((cat) {
+                        final isSelected = _acceptedCategories.contains(cat);
+                        return FilterChip(
+                          label: Text(cat, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _acceptedCategories.add(cat);
+                              } else {
+                                _acceptedCategories.remove(cat);
+                              }
+                            });
+                          },
+                          selectedColor: AppColors.primary,
+                          checkmarkColor: Colors.white,
+                        );
+                      }).toList(),
                     ),
 
                     const SizedBox(height: 20),

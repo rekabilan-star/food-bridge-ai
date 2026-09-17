@@ -244,11 +244,22 @@ exports.getDonationReport = async (req, res, next) => {
     }
 };
 
-// @desc    Send Announcement
+// @desc    Send Announcement with Role Targeting
+// @route   POST /api/admin/announcement
+// @access  Private (Admin)
 exports.sendAnnouncement = async (req, res, next) => {
     try {
-      const { title, body, priority } = req.body;
-      const users = await User.find({ status: 'approved' });
+      const { title, body, priority, targetRole } = req.body;
+
+      const filter = { status: 'approved' };
+      if (targetRole && targetRole !== 'all') {
+        filter.role = targetRole.toLowerCase();
+      } else {
+        // Exclude admins from receiving their own announcements unless explicitly 'all'
+        filter.role = { $ne: 'admin' };
+      }
+
+      const users = await User.find(filter);
 
       users.forEach(user => {
           notify({
@@ -260,7 +271,10 @@ exports.sendAnnouncement = async (req, res, next) => {
           });
       });
 
-      res.status(200).json({ success: true, message: 'Announcement sent to all users' });
+      res.status(200).json({
+        success: true,
+        message: `Announcement sent to ${targetRole && targetRole !== 'all' ? targetRole : 'all users'} (${users.length} recipients)`
+      });
     } catch (err) {
       next(err);
     }

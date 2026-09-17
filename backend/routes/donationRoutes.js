@@ -9,6 +9,8 @@ const {
   confirmDelivery,
   getNgoAssignedDonations,
   getDonation,
+  getDonationRoute,
+  verifyQrDetails,
   cancelDonation,
   assignVolunteer,
   getDonationRecommendations,
@@ -41,6 +43,7 @@ router
   .get(authorize('ngo', 'admin'), getAvailableDonations);
 
 router.get('/donor', authorize('donor'), getDonorDonations);
+router.get('/verify/:qrCode', verifyQrDetails);
 router.get('/ngo/assigned', authorize('ngo'), getNgoAssignedDonations);
 router.get('/volunteer/route', authorize('volunteer', 'ngo'), getVolunteerRoute);
 
@@ -52,6 +55,7 @@ router.post('/upload', uploadCloudinary.single('image'), (req, res) => {
 router.put('/location', authorize('ngo'), updateLocation);
 
 router.get('/:id', getDonation);
+router.get('/:id/route', getDonationRoute);
 router.get('/:id/recommendations', getDonationRecommendations);
 router.put('/:id/status', updateDonationStatus);
 router.put('/:id/cancel', cancelDonation);

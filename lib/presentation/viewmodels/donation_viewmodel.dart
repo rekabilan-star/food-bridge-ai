@@ -20,6 +20,7 @@ class DonationViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _socketService.socket.off('donation_status_update');
+    _socketService.socket.off('new_donation');
     super.dispose();
   }
 
@@ -100,6 +101,27 @@ class DonationViewModel extends ChangeNotifier {
         debugPrint('[DonationViewModel] Non-blocking local notification error: $e');
       }
     });
+
+    // Real-time listener for incoming available donations for NGOs within 20 KM
+    _socketService.onNewDonation((data) {
+      try {
+        final newDonation = DonationModel.fromJson(data);
+        if (newDonation.id.isEmpty) return;
+
+        final alreadyExists = _donations.any((d) => d.id == newDonation.id);
+        if (!alreadyExists) {
+          _donations.insert(0, newDonation);
+          _safeNotify();
+
+          PushNotificationService.showNotification(
+            title: "New Donation Available 🥗",
+            body: "${newDonation.foodName} is now available within your area.",
+          );
+        }
+      } catch (e) {
+        debugPrint('[DonationViewModel] new_donation socket parse error: $e');
+      }
+    });
   }
 
   void _setLoading(bool value) {
@@ -168,23 +190,9 @@ class DonationViewModel extends ChangeNotifier {
       _recommendations = await _repository.getDonationRecommendations(id);
       _errorMessage = null;
     } catch (e) {
-      _recommendations = [
-        {
-          "ngoId": "ngo_01",
-          "ngoName": "Asha Food Rescue Foundation",
-          "distanceKm": 1.4,
-          "matchScore": 98,
-          "phone": "+91 9876543210",
-        },
-        {
-          "ngoId": "ngo_02",
-          "ngoName": "Seva Annapoorna Trust",
-          "distanceKm": 2.8,
-          "matchScore": 92,
-          "phone": "+91 9845012345",
-        }
-      ];
-      _errorMessage = null;
+      debugPrint('[DonationViewModel] fetchDonationRecommendations error: $e');
+      _recommendations = [];
+      _errorMessage = e.toString();
     }
     _setLoading(false);
     return _recommendations;
@@ -207,21 +215,15 @@ class DonationViewModel extends ChangeNotifier {
     _setLoading(true);
     try {
       _currentDonation = await _repository.createDonation(donation, imageFile);
+      _errorMessage = null;
       await fetchDonorDonations();
       _setLoading(false);
       return true;
     } catch (e) {
-      debugPrint('[DonationViewModel] createDonation error: $e. Using local fallback.');
-      final localDonation = donation.copyWith(
-        id: donation.id.isNotEmpty ? donation.id : 'FDB-${DateTime.now().millisecondsSinceEpoch}',
-        status: donation.status.isNotEmpty ? donation.status : 'waiting',
-        imageUrl: imageFile != null ? imageFile.path : (donation.imageUrl.isNotEmpty ? donation.imageUrl : ''),
-      );
-      _currentDonation = localDonation;
-      _donations.insert(0, localDonation);
-      _errorMessage = null;
+      debugPrint('[DonationViewModel] createDonation failed: $e');
+      _errorMessage = e.toString().replaceAll("Exception:", "").trim();
       _setLoading(false);
-      return true;
+      return false;
     }
   }
 
@@ -314,6 +316,15 @@ class DonationViewModel extends ChangeNotifier {
       _errorMessage = null;
       _setLoading(false);
       return true;
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyRescueQr(String qrCode) async {
+    try {
+      return await _repository.verifyRescueQr(qrCode);
+    } catch (e) {
+      debugPrint('[DonationViewModel] verifyRescueQr error: $e');
+      rethrow;
     }
   }
 

@@ -116,11 +116,11 @@ class AdminRepository {
     }
   }
 
-  Future<void> sendAnnouncement(String title, String body) async {
+  Future<void> sendAnnouncement(String title, String body, {String targetRole = 'all'}) async {
     try {
       await _apiService.dio.post(
         'admin/announcement',
-        data: {'title': title, 'body': body},
+        data: {'title': title, 'body': body, 'targetRole': targetRole},
       );
     } on DioException catch (e) {
       throw e.error ?? "Failed to send announcement";

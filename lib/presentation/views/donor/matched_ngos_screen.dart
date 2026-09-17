@@ -187,14 +187,32 @@ class _MatchedNgosScreenState extends State<MatchedNgosScreen> {
         final ngo = ngos[index];
         final double score = (ngo['score'] ?? 0).toDouble();
         final int confidence = ngo['confidence'] ?? 0;
+        final bool isTopMatch = index == 0 && score > 70;
 
         return Card(
-          elevation: 2,
+          elevation: isTopMatch ? 6 : 2,
           margin: const EdgeInsets.only(bottom: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: isTopMatch ? const BorderSide(color: AppColors.primary, width: 2) : BorderSide.none,
+          ),
           child: Column(
             children: [
-              _buildNgoHeader(ngo, score),
+              if (isTopMatch)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                  ),
+                  child: const Text(
+                    "AI RECOMMENDED TOP MATCH",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
+                  ),
+                ),
+              _buildNgoHeader(ngo, score, !isTopMatch),
               const Divider(height: 1),
               Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -216,12 +234,12 @@ class _MatchedNgosScreenState extends State<MatchedNgosScreen> {
     );
   }
 
-  Widget _buildNgoHeader(Map<String, dynamic> ngo, double score) {
+  Widget _buildNgoHeader(Map<String, dynamic> ngo, double score, bool roundTop) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: roundTop ? const BorderRadius.vertical(top: Radius.circular(24)) : null,
       ),
       child: Row(
         children: [

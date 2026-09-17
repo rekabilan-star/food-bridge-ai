@@ -168,7 +168,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('update_location', async (data) => {
-    const { donationId, latitude, longitude } = data;
+    const { donationId, latitude, longitude, accuracy, speed, heading } = data;
     socket.to(`delivery_${donationId}`).emit('location_update', { ...data, volunteerId: userId, timestamp: new Date() });
 
     const updateFields = {
@@ -176,11 +176,33 @@ io.on('connection', (socket) => {
       currentLongitude: longitude,
       lastLocationUpdate: new Date()
     };
+
     if (latitude && longitude) {
+      const coords = [parseFloat(longitude), parseFloat(latitude)];
       updateFields.location = {
         type: 'Point',
-        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+        coordinates: coords
       };
+
+      // Requirement: Historical GPS Logging
+      try {
+        if (donationId) {
+          await LocationLog.create({
+            donationId,
+            volunteerId: userId,
+            location: {
+              type: 'Point',
+              coordinates: coords
+            },
+            accuracy: accuracy || 0,
+            speed: speed || 0,
+            heading: heading || 0,
+            timestamp: new Date()
+          });
+        }
+      } catch (logErr) {
+        console.error('Location Log Error:', logErr.message);
+      }
     }
 
     await User.findByIdAndUpdate(userId, updateFields);

@@ -41,7 +41,7 @@ exports.registerDonor = async (req, res, next) => {
 // @access  Public
 exports.registerNgo = async (req, res, next) => {
   try {
-    const { name, email, password, phoneNumber, address, latitude, longitude, ngoRegistrationNumber, certificateUrl, idProofUrl } = req.body;
+    const { name, email, password, phoneNumber, address, latitude, longitude, ngoRegistrationNumber, certificateUrl, idProofUrl, acceptedCategories, maxDailyMeals } = req.body;
 
     // Check if NGO already exists
     const userExists = await User.findOne({ email });
@@ -51,6 +51,8 @@ exports.registerNgo = async (req, res, next) => {
 
     const user = await User.create({
       name, email, password, phoneNumber, address, latitude, longitude, ngoRegistrationNumber, ngoCertificateUrl: certificateUrl, ngoIdProofUrl: idProofUrl, role: 'ngo', status: 'pending',
+      acceptedCategories: acceptedCategories || [],
+      maxDailyMeals: maxDailyMeals || 0,
     });
 
     sendTokenResponse(user, 201, res, req);
@@ -152,7 +154,9 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       lastLogin: user.lastLogin,
       ngoRegistrationNumber: user.ngoRegistrationNumber,
       ngoCertificateUrl: user.ngoCertificateUrl,
-      ngoIdProofUrl: user.ngoIdProofUrl
+      ngoIdProofUrl: user.ngoIdProofUrl,
+      acceptedCategories: user.acceptedCategories || [],
+      maxDailyMeals: user.maxDailyMeals || 0
     }
   });
 };

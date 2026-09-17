@@ -50,17 +50,27 @@ class NotificationViewModel extends ChangeNotifier {
 
     _socketService.socket.off('new_notification');
     _socketService.socket.on('new_notification', (data) {
-      final newNotification = NotificationModel.fromJson(data);
-      _notifications.insert(0, newNotification);
-      _unreadCount++;
-      
-      PushNotificationService.showNotification(
-        title: newNotification.title,
-        body: newNotification.body,
-        data: newNotification.data,
-      );
+      try {
+        if (data == null) return;
+        final newNotification = NotificationModel.fromJson(data);
+        if (newNotification.id.isEmpty) return;
 
-      _safeNotify();
+        final alreadyExists = _notifications.any((n) => n.id == newNotification.id);
+        if (!alreadyExists) {
+          _notifications.insert(0, newNotification);
+          _unreadCount++;
+          
+          PushNotificationService.showNotification(
+            title: newNotification.title,
+            body: newNotification.body,
+            data: newNotification.data,
+          );
+
+          _safeNotify();
+        }
+      } catch (e) {
+        debugPrint('[NotificationViewModel] Error processing new_notification: $e');
+      }
     });
 
     _socketService.socket.off('unread_count_update');

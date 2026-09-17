@@ -9,6 +9,7 @@ import 'manage_ngos_screen.dart';
 import 'analytics_dashboard_screen.dart';
 import 'manage_users_screen.dart';
 import 'donation_audit_screen.dart';
+import '../common/verification_scanner_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
@@ -360,47 +361,86 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildCharts(Map chartData) {
     final daily = chartData['dailyDonations'] as List? ?? [];
-    if (daily.isEmpty) {
+    final categories = chartData['categories'] as List? ?? [];
+    
+    if (daily.isEmpty && categories.isEmpty) {
        return Container(
          height: 180,
+         width: double.infinity,
          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.border)),
          child: const Center(child: Text("No volume data available", style: TextStyle(color: Colors.grey, fontSize: 12))),
        );
     }
 
-    return Container(
-      height: 250,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: SfCartesianChart(
-        title: const ChartTitle(text: 'Daily Food Volume', textStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-        primaryXAxis: const CategoryAxis(majorGridLines: MajorGridLines(width: 0), axisLine: AxisLine(width: 0)),
-        primaryYAxis: const NumericAxis(majorGridLines: MajorGridLines(width: 0.5, dashArray: [5, 5]), axisLine: AxisLine(width: 0)),
-        plotAreaBorderWidth: 0,
-        tooltipBehavior: TooltipBehavior(enable: true),
-        series: <CartesianSeries>[
-          SplineAreaSeries<dynamic, String>(
-            dataSource: daily,
-            xValueMapper: (data, _) {
-              final String id = data['_id'] ?? '';
-              return id.length > 5 ? id.substring(5) : id;
-            },
-            yValueMapper: (data, _) => (data['count'] ?? 0).toDouble(),
-            animationDuration: 800,
-            gradient: LinearGradient(
-              colors: [AppColors.adminColor.withValues(alpha: 0.3), AppColors.adminColor.withValues(alpha: 0.0)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+    return Column(
+      children: [
+        // Daily Spline Area Chart
+        Container(
+          height: 240,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: SfCartesianChart(
+            title: const ChartTitle(text: '7-Day Food Rescue Volume', textStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+            primaryXAxis: const CategoryAxis(majorGridLines: MajorGridLines(width: 0), axisLine: AxisLine(width: 0), labelStyle: TextStyle(fontSize: 9)),
+            primaryYAxis: const NumericAxis(majorGridLines: MajorGridLines(width: 0.5, dashArray: [5, 5]), axisLine: AxisLine(width: 0), labelStyle: TextStyle(fontSize: 9)),
+            plotAreaBorderWidth: 0,
+            tooltipBehavior: TooltipBehavior(enable: true, header: 'Rescues'),
+            series: <CartesianSeries>[
+              SplineAreaSeries<dynamic, String>(
+                dataSource: daily,
+                xValueMapper: (data, _) {
+                  final String id = data['_id'] ?? '';
+                  return id.length > 5 ? id.substring(5) : id;
+                },
+                yValueMapper: (data, _) => (data['count'] ?? 0).toDouble(),
+                animationDuration: 1200,
+                gradient: LinearGradient(
+                  colors: [AppColors.adminColor.withValues(alpha: 0.3), AppColors.adminColor.withValues(alpha: 0.0)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderColor: AppColors.adminColor,
+                borderWidth: 3,
+                markerSettings: const MarkerSettings(isVisible: true, width: 4, height: 4, color: AppColors.adminColor),
+              )
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 16),
+
+        // Category Pie Chart
+        if (categories.isNotEmpty)
+          Container(
+            height: 240,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.border),
             ),
-            borderColor: AppColors.adminColor,
-            borderWidth: 3,
-          )
-        ],
-      ),
+            child: SfCircularChart(
+              title: const ChartTitle(text: 'Rescue Distribution by Category', textStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+              legend: const Legend(isVisible: true, position: LegendPosition.bottom, overflowMode: LegendItemOverflowMode.wrap, textStyle: TextStyle(fontSize: 9)),
+              tooltipBehavior: TooltipBehavior(enable: true),
+              series: <CircularSeries>[
+                PieSeries<dynamic, String>(
+                  dataSource: categories,
+                  xValueMapper: (data, _) => data['_id'] ?? 'Other',
+                  yValueMapper: (data, _) => (data['count'] ?? 0).toDouble(),
+                  dataLabelSettings: const DataLabelSettings(isVisible: true, labelPosition: ChartDataLabelPosition.outside, textStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  enableTooltip: true,
+                  explode: true,
+                  explodeIndex: 0,
+                )
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -469,64 +509,158 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         const SizedBox(height: 12),
         _buildActionRow(
           _buildModernActionCard("Export PDF", "System Summary", Icons.picture_as_pdf_rounded, Colors.red, () => _exportSystemReport(context)),
-          _buildModernActionCard("Broadcast Alert", "Alert all users", Icons.campaign_rounded, Colors.purple, () => _showAnnouncementDialog(context)),
+          _buildModernActionCard("Verify Rescue", "Scan certificate", Icons.qr_code_scanner_rounded, Colors.teal, () {
+             Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScannerScreen()));
+          }),
         ),
+        const SizedBox(height: 12),
+        _buildModernActionCard("Broadcast Alert", "Alert all users", Icons.campaign_rounded, Colors.purple, () => _showAnnouncementDialog(context)),
       ],
     );
-  }
-
-  void _exportSystemReport(BuildContext context) async {
-    final viewModel = context.read<AdminViewModel>();
-    UIUtils.showLoadingDialog(context);
-    
-    try {
-      final donations = await viewModel.fetchReportData();
-      final file = await PdfGenerator.generateSystemSummary(donations);
-      
-      if (context.mounted) {
-        Navigator.pop(context);
-        await OpenFile.open(file.path);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        UIUtils.showErrorDialog(context, "Failed to generate report: $e");
-      }
-    }
   }
 
   void _showAnnouncementDialog(BuildContext context) {
     final titleController = TextEditingController();
     final bodyController = TextEditingController();
+    String targetRole = 'all';
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text("Broadcast System Announcement", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: titleController, decoration: const InputDecoration(labelText: "Subject", hintText: "e.g., Scheduled Maintenance")),
-            const SizedBox(height: 12),
-            TextField(controller: bodyController, maxLines: 3, decoration: const InputDecoration(labelText: "Message", hintText: "Enter the announcement body...")),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text("Broadcast System Announcement", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: "Subject", hintText: "e.g., Scheduled Maintenance")),
+                const SizedBox(height: 12),
+                TextField(controller: bodyController, maxLines: 3, decoration: const InputDecoration(labelText: "Message", hintText: "Enter the announcement body...")),
+                const SizedBox(height: 20),
+                const Text("Target Audience", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: targetRole,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text("All Active Users")),
+                    DropdownMenuItem(value: 'donor', child: Text("Donors Only")),
+                    DropdownMenuItem(value: 'ngo', child: Text("NGO Partners Only")),
+                  ],
+                  onChanged: (v) => setDialogState(() => targetRole = v!),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.isEmpty || bodyController.text.isEmpty) return;
+                
+                final viewModel = context.read<AdminViewModel>();
+                UIUtils.showLoadingDialog(context);
+                
+                try {
+                  // Requirement: Backend must enforce role filtering
+                  await viewModel.sendAnnouncement(titleController.text, bodyController.text, targetRole: targetRole);
+                  if (context.mounted) {
+                      Navigator.pop(context); // Close loading
+                      Navigator.pop(context); // Close dialog
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Announcement sent to $targetRole recipients!")));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading
+                    UIUtils.showErrorDialog(context, "Broadcast failed: $e");
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(minimumSize: const Size(100, 42)),
+              child: const Text("SEND"),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
-          ElevatedButton(
-            onPressed: () async {
-              if (titleController.text.isEmpty || bodyController.text.isEmpty) return;
-              await context.read<AdminViewModel>().sendAnnouncement(titleController.text, bodyController.text);
-              if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Announcement sent successfully!")));
-              }
-            },
-            style: ElevatedButton.styleFrom(minimumSize: const Size(100, 42)),
-            child: const Text("SEND"),
+      ),
+    );
+  }
+
+  void _exportSystemReport(BuildContext context) async {
+    DateTime? startDate;
+    DateTime? endDate;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text("Export Operational Report", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Select a date range for the audit report.", style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 20),
+              ListTile(
+                title: Text(startDate == null ? "Pick Start Date" : DateFormat('dd MMM yyyy').format(startDate!)),
+                leading: const Icon(Icons.calendar_today_rounded, size: 20),
+                onTap: () async {
+                  final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2023), lastDate: DateTime.now());
+                  if (picked != null) setDialogState(() => startDate = picked);
+                },
+                tileColor: Colors.grey[100],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                title: Text(endDate == null ? "Pick End Date" : DateFormat('dd MMM yyyy').format(endDate!)),
+                leading: const Icon(Icons.event_rounded, size: 20),
+                onTap: () async {
+                  final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: startDate ?? DateTime(2023), lastDate: DateTime.now());
+                  if (picked != null) setDialogState(() => endDate = picked);
+                },
+                tileColor: Colors.grey[100],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+            ElevatedButton(
+              onPressed: () async {
+                final viewModel = context.read<AdminViewModel>();
+                Navigator.pop(context); // Close selection
+                UIUtils.showLoadingDialog(context);
+                
+                try {
+                  final donations = await viewModel.fetchReportData(
+                    start: startDate?.toIso8601String(),
+                    end: endDate?.toIso8601String(),
+                  );
+                  final file = await PdfGenerator.generateSystemSummary(donations);
+                  
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading
+                    await OpenFile.open(file.path);
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading
+                    UIUtils.showErrorDialog(context, "Failed to generate report: $e");
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(minimumSize: const Size(100, 42)),
+              child: const Text("GENERATE PDF"),
+            ),
+          ],
+        ),
       ),
     );
   }
