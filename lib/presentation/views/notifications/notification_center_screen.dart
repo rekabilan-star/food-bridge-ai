@@ -15,6 +15,7 @@ import '../ngo/ngo_tracking_screen.dart';
 import '../ngo/ngo_donation_requests_screen.dart';
 import '../common/donation_tracking_screen.dart';
 import '../donor/donor_dashboard_screen.dart';
+import '../../../core/utils/ui_utils.dart';
 
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
@@ -59,17 +60,22 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     if (donationId != null && donationId.isNotEmpty) {
       await donationVM.fetchDonationDetails(donationId);
       final donation = donationVM.currentDonation;
-      if (context.mounted && donation != null) {
-        if (userRole == UserRole.ngo) {
-          if (donation.status == 'accepted' || donation.status == 'on_the_way' || donation.status == 'arrived' || donation.status == 'picked_up') {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
+      if (context.mounted) {
+        if (donation != null) {
+          if (userRole == UserRole.ngo) {
+            if (donation.status == 'accepted' || donation.status == 'on_the_way' || donation.status == 'arrived' || donation.status == 'picked_up') {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
+            } else {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
+            }
           } else {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
+            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
           }
-        } else {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
+          return;
+        } else if (donationVM.errorMessage != null && donationVM.errorMessage!.isNotEmpty) {
+          UIUtils.showSnackBar(context, donationVM.errorMessage!, isError: true);
+          return;
         }
-        return;
       }
     }
 
@@ -415,6 +421,33 @@ class _NotificationCard extends StatelessWidget {
                           notification.body,
                           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.3),
                         ),
+                        if (notification.isExpired) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.timer_off_outlined, size: 12, color: Colors.red),
+                                SizedBox(width: 4),
+                                Text(
+                                  'EXPIRED / UNAVAILABLE',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

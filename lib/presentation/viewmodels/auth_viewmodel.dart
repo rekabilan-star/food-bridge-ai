@@ -353,10 +353,28 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  static final List<VoidCallback> _logoutHooks = [];
+
+  static void registerLogoutHook(VoidCallback hook) {
+    if (!_logoutHooks.contains(hook)) {
+      _logoutHooks.add(hook);
+    }
+  }
+
   Future<void> logout() async {
     _socketService.disconnect();
     await _authRepository.logout();
     _user = null;
+
+    // Purge cached state across viewmodels to guarantee user session isolation
+    for (final hook in _logoutHooks) {
+      try {
+        hook();
+      } catch (e) {
+        debugPrint('[AuthViewModel] Logout hook error: $e');
+      }
+    }
+
     _safeNotify();
   }
 }

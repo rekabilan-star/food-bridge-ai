@@ -7,6 +7,7 @@ class NotificationModel {
   final String priority;
   final Map<String, dynamic> data;
   bool isRead;
+  final DateTime? expiresAt;
   final DateTime createdAt;
 
   NotificationModel({
@@ -18,10 +19,27 @@ class NotificationModel {
     required this.priority,
     required this.data,
     required this.isRead,
+    this.expiresAt,
     required this.createdAt,
   });
 
+  bool get isExpired {
+    if (expiresAt != null) {
+      return DateTime.now().isAfter(expiresAt!);
+    }
+    return false;
+  }
+
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    DateTime? parsedExpiry;
+    if (json['expiresAt'] != null) {
+      try {
+        parsedExpiry = DateTime.parse(json['expiresAt'].toString()).toLocal();
+      } catch (_) {
+        parsedExpiry = null;
+      }
+    }
+
     return NotificationModel(
       id: json['_id'] ?? '',
       userId: json['userId'] ?? '',
@@ -31,7 +49,10 @@ class NotificationModel {
       priority: json['priority'] ?? 'medium',
       data: json['data'] ?? {},
       isRead: json['read'] ?? false,
-      createdAt: DateTime.parse(json['createdAt']),
+      expiresAt: parsedExpiry,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'].toString()).toLocal()
+          : DateTime.now(),
     );
   }
 
@@ -45,6 +66,7 @@ class NotificationModel {
       'priority': priority,
       'data': data,
       'read': isRead,
+      'expiresAt': expiresAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
     };
   }

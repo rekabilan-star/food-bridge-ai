@@ -19,6 +19,16 @@ exports.getOrCreateChat = async (req, res, next) => {
     };
 
     if (donationId) {
+      const Donation = require('../models/Donation');
+      const donation = await Donation.findById(donationId);
+      if (donation) {
+        const isDonor = donation.donorId && donation.donorId.toString() === req.user.id;
+        const isAssignedNgo = donation.assignedNgoId && donation.assignedNgoId.toString() === req.user.id;
+        const isVolunteer = donation.volunteerId && donation.volunteerId.toString() === req.user.id;
+        if (!isDonor && !isAssignedNgo && !isVolunteer && req.user.role !== 'admin') {
+          return res.status(403).json({ success: false, message: 'Not authorized to initiate chat for this donation' });
+        }
+      }
       query.donationId = donationId;
     }
 
@@ -49,6 +59,16 @@ exports.getOrCreateChat = async (req, res, next) => {
 // @access  Private
 exports.getChatMessages = async (req, res, next) => {
   try {
+    const chat = await Chat.findById(req.params.id);
+    if (!chat) {
+      return res.status(404).json({ success: false, message: 'Chat not found' });
+    }
+
+    const isParticipant = chat.participants.some(p => p.toString() === req.user.id);
+    if (!isParticipant && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to view messages in this chat' });
+    }
+
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 30;
     const startIndex = (page - 1) * limit;
@@ -92,6 +112,11 @@ exports.sendMessage = async (req, res, next) => {
     const chat = await Chat.findById(chatId);
     if (!chat) {
       return res.status(404).json({ success: false, message: 'Chat not found' });
+    }
+
+    const isParticipant = chat.participants.some(p => p.toString() === req.user.id);
+    if (!isParticipant && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to send messages in this chat' });
     }
 
     // Duplicate message prevention: same sender, same chat, same text within last 2 seconds

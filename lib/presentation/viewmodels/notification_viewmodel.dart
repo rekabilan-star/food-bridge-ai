@@ -3,11 +3,30 @@ import '../../data/models/notification_model.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../../core/services/socket_service.dart';
 import '../../core/services/push_notification_service.dart';
+import 'auth_viewmodel.dart';
 
 class NotificationViewModel extends ChangeNotifier {
   final NotificationRepository _repository = NotificationRepository();
   final SocketService _socketService = SocketService();
   bool _disposed = false;
+
+  NotificationViewModel() {
+    AuthViewModel.registerLogoutHook(clear);
+  }
+
+  void clear() {
+    _notifications = [];
+    _unreadCount = 0;
+    _isLoading = false;
+    _isMoreLoading = false;
+    _errorMessage = null;
+    _currentPage = 1;
+    _totalPages = 1;
+    _selectedCategory = null;
+    _searchQuery = null;
+    _readFilter = null;
+    _safeNotify();
+  }
 
   @override
   void dispose() {

@@ -191,6 +191,8 @@ class DonationModel {
     this.deliveryDetails,
   }) : checklist = checklist ?? QualityChecklist();
 
+  bool get isExpired => status.toLowerCase() == 'expired' || DateTime.now().isAfter(bestBeforeTime);
+
   factory DonationModel.fromJson(Map<String, dynamic> json) {
     final donorData = json['donorId'] is Map ? json['donorId'] : null;
     final ngoData = json['assignedNgoId'] is Map ? json['assignedNgoId'] : null;

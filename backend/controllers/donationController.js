@@ -4,8 +4,47 @@ const { recommendNgos } = require('../services/aiMatchingService');
 const { optimizeRoute } = require('../services/routeOptimizationService');
 const osrmService = require('../services/osrmService');
 const { notify } = require('../services/notificationService');
-const sms = require('../services/smsService');
 const geolib = require('geolib');
+
+/**
+ * Emit targeted donation status updates strictly to relevant rooms (no global leak)
+ */
+async function emitTargetedStatusUpdate(donation) {
+  if (!global.io || !donation) return;
+  const socketPayload = {
+    donationId: donation._id.toString(),
+    status: donation.status,
+    timeline: donation.timeline,
+    donation
+  };
+
+  const targetRooms = new Set();
+  const donorId = donation.donorId?._id ? donation.donorId._id.toString() : donation.donorId?.toString();
+  if (donorId) targetRooms.add(donorId);
+
+  const ngoId = donation.assignedNgoId?._id ? donation.assignedNgoId._id.toString() : donation.assignedNgoId?.toString();
+  if (ngoId) targetRooms.add(ngoId);
+
+  const volId = donation.volunteerId?._id ? donation.volunteerId._id.toString() : donation.volunteerId?.toString();
+  if (volId) targetRooms.add(volId);
+
+  targetRooms.add(`delivery_${donation._id.toString()}`);
+
+  targetRooms.forEach(room => {
+    global.io.to(room).emit('donation_status_update', socketPayload);
+  });
+
+  // Legitimate admin notification
+  try {
+    const admins = await User.find({ role: 'admin' }).select('_id');
+    admins.forEach(admin => {
+      global.io.to(admin._id.toString()).emit('donation_status_update', socketPayload);
+    });
+  } catch (err) {
+    console.error('Error sending socket update to admins:', err);
+  }
+}
+
 
 // @desc    Get optimized route for volunteer
 // @route   GET /api/donations/volunteer/route
@@ -49,6 +88,11 @@ exports.getDonationRecommendations = async (req, res, next) => {
     const donation = await Donation.findById(req.params.id);
     if (!donation) {
       return res.status(404).json({ success: false, message: 'Donation not found' });
+    }
+
+    const isDonor = donation.donorId && donation.donorId.toString() === req.user.id;
+    if (!isDonor && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to view recommendations for this donation' });
     }
 
     const recommendations = await recommendNgos(donation);
@@ -129,7 +173,8 @@ exports.createDonation = async (req, res, next) => {
         body: `${req.user.name} just posted a new donation: ${donation.foodName}. Check it out!`,
         category: 'DONATION',
         priority: 'high',
-        data: { donationId: donation._id.toString() }
+        data: { donationId: donation._id.toString() },
+        expiresAt: donation.bestBeforeTime
       });
 
       if (global.io) {
@@ -245,7 +290,10 @@ exports.getDonorDonations = async (req, res, next) => {
 exports.getAvailableDonations = async (req, res, next) => {
   try {
     const { search } = req.query;
-    let query = { status: 'waiting' };
+    let query = {
+      status: 'waiting',
+      bestBeforeTime: { $gt: new Date() }
+    };
 
     if (search) {
       query.$or = [
@@ -364,9 +412,22 @@ exports.updateDonationStatus = async (req, res, next) => {
         });
       }
 
-      // Atomic Acceptance Update to prevent race conditions
+      // Check if food is expired before acceptance
+      if (donation.bestBeforeTime && new Date() >= new Date(donation.bestBeforeTime)) {
+        await Donation.updateOne({ _id: donation._id, status: 'waiting' }, { status: 'expired' });
+        return res.status(400).json({
+          success: false,
+          message: 'This donation has expired and can no longer be accepted'
+        });
+      }
+
+      // Atomic Acceptance Update to prevent race conditions & check expiry atomically
       const updatedDonation = await Donation.findOneAndUpdate(
-        { _id: req.params.id, status: 'waiting' },
+        {
+          _id: req.params.id,
+          status: 'waiting',
+          bestBeforeTime: { $gt: new Date() }
+        },
         {
           $set: {
             status: 'accepted',
@@ -384,6 +445,13 @@ exports.updateDonationStatus = async (req, res, next) => {
       ).populate('donorId', 'name phoneNumber');
 
       if (!updatedDonation) {
+        const checkExisting = await Donation.findById(req.params.id);
+        if (checkExisting && checkExisting.bestBeforeTime && new Date() >= new Date(checkExisting.bestBeforeTime)) {
+          return res.status(400).json({
+            success: false,
+            message: 'This donation has expired and is no longer available'
+          });
+        }
         return res.status(400).json({
           success: false,
           message: 'Donation is no longer available or was already accepted'
@@ -411,19 +479,8 @@ exports.updateDonationStatus = async (req, res, next) => {
       donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber');
     }
 
-    // Notify via Socket.IO for real-time tracking (both to donor room and broadcast)
-    if (global.io) {
-      const socketPayload = {
-        donationId: donation._id.toString(),
-        status: donation.status,
-        timeline: donation.timeline,
-        donation
-      };
-      if (donation.donorId && donation.donorId._id) {
-        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
-      }
-      global.io.emit('donation_status_update', socketPayload);
-    }
+    // Targeted Socket.IO update (no global leak)
+    await emitTargetedStatusUpdate(donation);
 
     // Professional Titles and Icons for different statuses
     let notifTitle = 'Donation Update 📢';
@@ -523,19 +580,8 @@ exports.cancelDonation = async (req, res, next) => {
     // Refresh for populating details
     donation = await Donation.findById(donation._id).populate('donorId', 'name phoneNumber').populate('assignedNgoId', 'name phoneNumber');
 
-    // Notify via Socket.IO for real-time tracking
-    if (global.io) {
-      const socketPayload = {
-        donationId: donation._id.toString(),
-        status: donation.status,
-        timeline: donation.timeline,
-        donation
-      };
-      if (donation.donorId && donation.donorId._id) {
-        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
-      }
-      global.io.emit('donation_status_update', socketPayload);
-    }
+    // Targeted Socket.IO update (no global leak)
+    await emitTargetedStatusUpdate(donation);
 
     // Trigger: Donation Cancelled/Rejected
     const targetUser = req.user.role === 'donor' ? donation.assignedNgoId : donation.donorId;
@@ -574,6 +620,11 @@ exports.assignVolunteer = async (req, res, next) => {
 
     if (!donation) {
       return res.status(404).json({ success: false, message: 'Donation not found' });
+    }
+
+    const isAssignedNgo = donation.assignedNgoId && donation.assignedNgoId.toString() === req.user.id;
+    if (!isAssignedNgo && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized to assign volunteer to this donation' });
     }
 
     const volunteer = await User.findById(volunteerId);
@@ -691,19 +742,8 @@ exports.verifyPickup = async (req, res, next) => {
 
     await donation.save();
 
-    // Broadcast Socket.IO update AFTER successful DB save
-    if (global.io) {
-      const socketPayload = {
-        donationId: donation._id.toString(),
-        status: donation.status,
-        timeline: donation.timeline,
-        donation
-      };
-      if (donation.donorId && donation.donorId._id) {
-        global.io.to(donation.donorId._id.toString()).emit('donation_status_update', socketPayload);
-      }
-      global.io.emit('donation_status_update', socketPayload);
-    }
+    // Targeted Socket.IO update (no global leak)
+    await emitTargetedStatusUpdate(donation);
 
     // Trigger: Pickup Completed - Notify Donor
     notify({
@@ -775,19 +815,8 @@ exports.confirmDelivery = async (req, res, next) => {
 
     await donation.save();
 
-    // Broadcast Socket.IO update AFTER successful DB save
-    if (global.io) {
-      const socketPayload = {
-        donationId: donation._id.toString(),
-        status: donation.status,
-        timeline: donation.timeline,
-        donation
-      };
-      if (donation.donorId) {
-        global.io.to(donation.donorId.toString()).emit('donation_status_update', socketPayload);
-      }
-      global.io.emit('donation_status_update', socketPayload);
-    }
+    // Targeted Socket.IO update (no global leak)
+    await emitTargetedStatusUpdate(donation);
 
     // Notify Donor about completion
     notify({
@@ -842,15 +871,45 @@ exports.getDonation = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'Donation not found' });
     }
 
-    // Access control: If donation is in 'waiting' status and accessed by an NGO, enforce 20 KM rule and approval
-    if (donation.status === 'waiting' && req.user.role === 'ngo') {
-      if (req.user.status !== 'approved') {
-        return res.status(403).json({ success: false, message: 'Only approved NGOs can view available donations' });
-      }
+    const donorIdStr = donation.donorId?._id ? donation.donorId._id.toString() : donation.donorId?.toString();
+    const assignedNgoIdStr = donation.assignedNgoId?._id ? donation.assignedNgoId._id.toString() : donation.assignedNgoId?.toString();
+    const volunteerIdStr = donation.volunteerId?._id ? donation.volunteerId._id.toString() : donation.volunteerId?.toString();
 
-      const ngoLat = req.user.currentLatitude || req.user.latitude;
-      const ngoLng = req.user.currentLongitude || req.user.longitude;
-      if (ngoLat && ngoLng && donation.latitude && donation.longitude) {
+    // 1. Admin: full legitimate access
+    if (req.user.role === 'admin') {
+      return res.status(200).json({ success: true, data: donation });
+    }
+
+    // 2. Donor: must be the donation owner
+    if (req.user.role === 'donor') {
+      if (donorIdStr !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Not authorized to view another donor\'s donation' });
+      }
+      return res.status(200).json({ success: true, data: donation });
+    }
+
+    // 3. Volunteer: must be the assigned volunteer
+    if (req.user.role === 'volunteer') {
+      if (volunteerIdStr !== req.user.id) {
+        return res.status(403).json({ success: false, message: 'Not authorized to view this donation' });
+      }
+      return res.status(200).json({ success: true, data: donation });
+    }
+
+    // 4. NGO:
+    if (req.user.role === 'ngo') {
+      // If waiting: must be approved and <= 20 KM
+      if (donation.status === 'waiting') {
+        if (req.user.status !== 'approved') {
+          return res.status(403).json({ success: false, message: 'Only approved NGOs can view available donations' });
+        }
+
+        const ngoLat = req.user.currentLatitude || req.user.latitude;
+        const ngoLng = req.user.currentLongitude || req.user.longitude;
+        if (!ngoLat || !ngoLng || (ngoLat === 0 && ngoLng === 0) || !donation.latitude || !donation.longitude) {
+          return res.status(403).json({ success: false, message: 'Valid geographic location coordinates required to verify 20 KM operating distance' });
+        }
+
         const distMeters = geolib.getDistance(
           { latitude: donation.latitude, longitude: donation.longitude },
           { latitude: ngoLat, longitude: ngoLng }
@@ -861,10 +920,46 @@ exports.getDonation = async (req, res, next) => {
             message: `Donation is outside your 20 KM operating range (${(distMeters / 1000).toFixed(1)} KM away)`
           });
         }
+
+        // Check if food has reached expiry
+        if (donation.bestBeforeTime && new Date() >= new Date(donation.bestBeforeTime)) {
+          donation.status = 'expired';
+          await Donation.updateOne({ _id: donation._id }, { status: 'expired' });
+          return res.status(200).json({
+            success: true,
+            data: donation,
+            expired: true,
+            message: 'This donation has expired and is no longer available'
+          });
+        }
+
+        return res.status(200).json({ success: true, data: donation });
       }
+
+      // If status is 'expired': allowed if within 20km or assigned, show expired state
+      if (donation.status === 'expired') {
+        return res.status(200).json({
+          success: true,
+          data: donation,
+          expired: true,
+          message: 'This donation has expired and is no longer available'
+        });
+      }
+
+      // For any non-waiting status (accepted, on_the_way, arrived, picked_up, delivered, completed, etc.):
+      // Must be the assigned NGO!
+      if (assignedNgoIdStr !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to view details of a donation accepted by another NGO'
+        });
+      }
+
+      return res.status(200).json({ success: true, data: donation });
     }
 
-    res.status(200).json({ success: true, data: donation });
+    // Default reject for unknown/unauthorized roles
+    return res.status(403).json({ success: false, message: 'Not authorized to access this donation' });
   } catch (err) {
     next(err);
   }

@@ -36,11 +36,15 @@ const NotificationSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  expiresAt: {
+    type: Date,
+  },
 });
 
 // Indexing for faster queries
 NotificationSchema.index({ userId: 1, createdAt: -1 });
 NotificationSchema.index({ userId: 1, read: 1 });
+NotificationSchema.index({ userId: 1, expiresAt: 1 });
 NotificationSchema.index({ category: 1 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);

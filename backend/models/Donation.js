@@ -86,6 +86,7 @@ const DonationSchema = new mongoose.Schema({
       'completed',
       'cancelled',
       'rejected',
+      'expired',
     ],
     default: 'waiting',
   },

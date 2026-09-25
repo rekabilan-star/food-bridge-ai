@@ -109,6 +109,55 @@ class DonationDetailsScreen extends StatelessWidget {
                         );
                       }
 
+                      if (statusLower == 'expired' || donation.isExpired) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.red[300]!),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.timer_off_rounded, color: Colors.red, size: 24),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  "This food donation has expired and is no longer available for rescue.",
+                                  style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 14),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (statusLower == 'cancelled' || statusLower == 'rejected') {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey[400]!),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.cancel_outlined, color: Colors.grey, size: 24),
+                              const SizedBox(width: 10),
+                              Text(
+                                "This donation was ${statusLower == 'cancelled' ? 'cancelled' : 'rejected'}.",
+                                style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
                       return ElevatedButton.icon(
                         onPressed: viewModel.isLoading ? null : () => _confirmAcceptance(context, viewModel),
                         style: ElevatedButton.styleFrom(

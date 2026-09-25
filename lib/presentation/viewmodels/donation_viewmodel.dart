@@ -5,6 +5,7 @@ import '../../data/repositories/donation_repository.dart';
 import '../../core/services/socket_service.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/utils/ui_utils.dart';
+import 'auth_viewmodel.dart';
 
 class DonationViewModel extends ChangeNotifier {
   final DonationRepository _repository = DonationRepository();
@@ -39,7 +40,17 @@ class DonationViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   DonationViewModel() {
-    // Requirement 3: Constructor must be light
+    AuthViewModel.registerLogoutHook(clear);
+  }
+
+  void clear() {
+    _donations = [];
+    _assignedDonations = [];
+    _recommendations = [];
+    _currentDonation = null;
+    _isLoading = false;
+    _errorMessage = null;
+    _safeNotify();
   }
 
   void initSocket() {

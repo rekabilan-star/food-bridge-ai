@@ -10,10 +10,11 @@ const User = require('../models/User');
  * @param {string} options.category - DONATION, CHAT, etc.
  * @param {string} options.priority - low, medium, high
  * @param {Object} options.data - Metadata for deep linking
+ * @param {Date|string} [options.expiresAt] - Optional expiration date
  */
 exports.notify = async (options) => {
   try {
-    const { userId, title, body, category, priority, data } = options;
+    const { userId, title, body, category, priority, data, expiresAt } = options;
 
     // 1. Save to Database for history
     const notification = await Notification.create({
@@ -22,7 +23,8 @@ exports.notify = async (options) => {
       body,
       category: category || 'SYSTEM',
       priority: priority || 'medium',
-      data: data || {}
+      data: data || {},
+      expiresAt: expiresAt || null
     });
 
     // 2. Emit via Socket.io for Real-time in-app alerts
@@ -48,6 +50,19 @@ exports.checkExpiringDonations = async () => {
     try {
         const Donation = require('../models/Donation');
         const now = new Date();
+
+        // 1. Proactively transition waiting donations that passed bestBeforeTime to 'expired'
+        await Donation.updateMany(
+            {
+                status: 'waiting',
+                bestBeforeTime: { $lte: now }
+            },
+            {
+                $set: { status: 'expired' }
+            }
+        );
+
+        // 2. Find donations expiring in less than 2 hours to alert nearby NGOs
         const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
         const expiringSoon = await Donation.find({
@@ -90,7 +105,8 @@ exports.checkExpiringDonations = async () => {
                     body: `${donation.foodName} will expire in less than 2 hours. Please rescue it now!`,
                     category: 'DONATION',
                     priority: 'high',
-                    data: { donationId: donation._id.toString() }
+                    data: { donationId: donation._id.toString() },
+                    expiresAt: donation.bestBeforeTime
                 });
             }
             donation.expiryNotified = true;
