@@ -124,6 +124,17 @@ class SocketService {
     });
   }
 
+  void onDonationClaimed(Function(Map<String, dynamic>) callback) {
+    socket.off('donation_claimed');
+    socket.on('donation_claimed', (data) {
+      if (data is Map<String, dynamic>) {
+        callback(data);
+      } else if (data is Map) {
+        callback(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
   void onUnreadCountUpdate(Function(Map<String, dynamic>) callback) {
     socket.off('unread_count_update');
     socket.on('unread_count_update', (data) {

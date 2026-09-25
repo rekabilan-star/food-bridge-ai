@@ -55,6 +55,19 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     final donationVM = context.read<DonationViewModel>();
 
     final userRole = authVM.user?.role;
+
+    // Fast-path feedback for already claimed donations
+    if (notification.title.contains('Claimed') || notification.body.contains('already been accepted')) {
+      if (context.mounted) {
+        UIUtils.showSnackBar(
+          context,
+          "This donation has already been accepted by another NGO and is no longer available.",
+          isError: false,
+        );
+      }
+      return;
+    }
+
     final String? donationId = notification.data['donationId']?.toString() ?? notification.data['id']?.toString();
 
     if (donationId != null && donationId.isNotEmpty) {
@@ -421,7 +434,33 @@ class _NotificationCard extends StatelessWidget {
                           notification.body,
                           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.3),
                         ),
-                        if (notification.isExpired) ...[
+                        if (notification.title.contains('Claimed') || notification.body.contains('already been accepted')) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.handshake_outlined, size: 12, color: Colors.orange),
+                                SizedBox(width: 4),
+                                Text(
+                                  'CLAIMED BY ANOTHER NGO',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else if (notification.isExpired) ...[
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

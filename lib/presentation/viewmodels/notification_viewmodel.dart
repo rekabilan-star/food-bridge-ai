@@ -33,6 +33,7 @@ class NotificationViewModel extends ChangeNotifier {
     _disposed = true;
     _socketService.socket.off('new_notification');
     _socketService.socket.off('unread_count_update');
+    _socketService.socket.off('donation_claimed');
     super.dispose();
   }
 
@@ -97,6 +98,31 @@ class NotificationViewModel extends ChangeNotifier {
       _unreadCount = data['unreadCount'] ?? _unreadCount;
       _safeNotify();
     });
+
+    _socketService.onDonationClaimed((data) {
+      try {
+        final String? claimedDonationId = data['donationId']?.toString();
+        if (claimedDonationId == null || claimedDonationId.isEmpty) return;
+
+        bool updatedAny = false;
+        for (int i = 0; i < _notifications.length; i++) {
+          final notif = _notifications[i];
+          final notifDonationId = notif.data['donationId']?.toString() ?? notif.data['id']?.toString();
+          if (notifDonationId == claimedDonationId) {
+            _notifications[i] = notif.copyWith(
+              title: "Donation Claimed 🤝",
+              body: "This donation has already been accepted by another NGO and is no longer available.",
+            );
+            updatedAny = true;
+          }
+        }
+        if (updatedAny) {
+          _safeNotify();
+        }
+      } catch (e) {
+        debugPrint('[NotificationViewModel] Error processing donation_claimed: $e');
+      }
+    });
   }
 
   Future<void> fetchNotifications({bool refresh = false}) async {
@@ -126,7 +152,9 @@ class NotificationViewModel extends ChangeNotifier {
       if (refresh) {
         _notifications = fetchedNotifications;
       } else {
-        _notifications.addAll(fetchedNotifications);
+        final existingIds = _notifications.map((n) => n.id).toSet();
+        final newItems = fetchedNotifications.where((fn) => !existingIds.contains(fn.id)).toList();
+        _notifications.addAll(newItems);
       }
 
       _unreadCount = result['unreadCount'] ?? 0;

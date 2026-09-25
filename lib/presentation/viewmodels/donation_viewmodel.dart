@@ -22,6 +22,7 @@ class DonationViewModel extends ChangeNotifier {
     _disposed = true;
     _socketService.socket.off('donation_status_update');
     _socketService.socket.off('new_donation');
+    _socketService.socket.off('donation_claimed');
     super.dispose();
   }
 
@@ -131,6 +132,32 @@ class DonationViewModel extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('[DonationViewModel] new_donation socket parse error: $e');
+      }
+    });
+
+    // Real-time listener for donation_claimed: evicts claimed donations from available list
+    _socketService.onDonationClaimed((data) {
+      try {
+        final String? claimedId = data['donationId']?.toString();
+        if (claimedId == null || claimedId.isEmpty) return;
+
+        bool changed = false;
+        final initialLength = _donations.length;
+        _donations.removeWhere((d) => d.id == claimedId);
+        if (_donations.length != initialLength) {
+          changed = true;
+        }
+
+        if (_currentDonation != null && _currentDonation!.id == claimedId && _currentDonation!.status == 'waiting') {
+          _currentDonation = _currentDonation!.copyWith(status: 'accepted');
+          changed = true;
+        }
+
+        if (changed) {
+          _safeNotify();
+        }
+      } catch (e) {
+        debugPrint('[DonationViewModel] donation_claimed socket parse error: $e');
       }
     });
   }

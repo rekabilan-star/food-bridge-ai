@@ -1,4 +1,5 @@
 const Donation = require('../models/Donation');
+const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { recommendNgos } = require('../services/aiMatchingService');
 const { optimizeRoute } = require('../services/routeOptimizationService');
@@ -458,6 +459,71 @@ exports.updateDonationStatus = async (req, res, next) => {
         });
       }
       donation = updatedDonation;
+
+      // Real-time notification to competing eligible NGOs that this donation has been claimed
+      try {
+        if (global.io) {
+          const competingNgoIds = new Set();
+
+          // 1. All NGOs who received notification for this donation
+          const notifiedRecords = await Notification.find({
+            category: 'DONATION',
+            'data.donationId': donation._id.toString()
+          }).select('userId').lean();
+
+          notifiedRecords.forEach(n => {
+            if (n.userId) competingNgoIds.add(n.userId.toString());
+          });
+
+          // 2. Also approved NGOs within 20 KM
+          if (donation.latitude && donation.longitude) {
+            try {
+              const geoNgos = await User.aggregate([
+                {
+                  $geoNear: {
+                    near: {
+                      type: 'Point',
+                      coordinates: [parseFloat(donation.longitude), parseFloat(donation.latitude)]
+                    },
+                    distanceField: 'distance',
+                    maxDistance: 20000,
+                    query: { role: 'ngo', status: 'approved' },
+                    spherical: true
+                  }
+                }
+              ]);
+              geoNgos.forEach(ngo => competingNgoIds.add(ngo._id.toString()));
+            } catch (geoErr) {
+              const allApprovedNgos = await User.find({ role: 'ngo', status: 'approved' }).select('_id currentLatitude latitude currentLongitude longitude');
+              allApprovedNgos.forEach(ngo => {
+                const ngoLat = ngo.currentLatitude || ngo.latitude;
+                const ngoLng = ngo.currentLongitude || ngo.longitude;
+                if (!ngoLat || !ngoLng || (ngoLat === 0 && ngoLng === 0)) return;
+                const dist = geolib.getDistance(
+                  { latitude: donation.latitude, longitude: donation.longitude },
+                  { latitude: ngoLat, longitude: ngoLng }
+                );
+                if (dist <= 20000) competingNgoIds.add(ngo._id.toString());
+              });
+            }
+          }
+
+          // Strictly exclude accepting NGO, donor, and admins (admins receive standard donation_status_update)
+          competingNgoIds.delete(req.user.id.toString());
+          if (donation.donorId) {
+            const donorIdStr = (donation.donorId._id || donation.donorId).toString();
+            competingNgoIds.delete(donorIdStr);
+          }
+
+          // Emit strictly to each competing NGO's private room with minimal non-sensitive payload
+          const claimedPayload = { donationId: donation._id.toString() };
+          for (const competingNgoId of competingNgoIds) {
+            global.io.to(competingNgoId).emit('donation_claimed', claimedPayload);
+          }
+        }
+      } catch (claimErr) {
+        console.error('Error emitting donation_claimed to competing NGOs:', claimErr);
+      }
     } else {
       // For any other status update, user must be either the donor, assigned NGO, or admin
       const isDonor = donation.donorId.toString() === req.user.id;

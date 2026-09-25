@@ -30,6 +30,32 @@ class NotificationModel {
     return false;
   }
 
+  NotificationModel copyWith({
+    String? id,
+    String? userId,
+    String? title,
+    String? body,
+    String? category,
+    String? priority,
+    Map<String, dynamic>? data,
+    bool? isRead,
+    DateTime? expiresAt,
+    DateTime? createdAt,
+  }) {
+    return NotificationModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      category: category ?? this.category,
+      priority: priority ?? this.priority,
+      data: data ?? this.data,
+      isRead: isRead ?? this.isRead,
+      expiresAt: expiresAt ?? this.expiresAt,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     DateTime? parsedExpiry;
     if (json['expiresAt'] != null) {
