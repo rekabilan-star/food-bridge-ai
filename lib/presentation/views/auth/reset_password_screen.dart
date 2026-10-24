@@ -2,11 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_pw_validator/flutter_pw_validator.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_icons.dart';
 import '../../../core/utils/ui_utils.dart';
-import 'package:flutter_pw_validator/flutter_pw_validator.dart';
-import '../common/widgets/glass_container.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/standard_card.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
@@ -19,8 +25,7 @@ class ResetPasswordScreen extends StatefulWidget {
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _otpController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isPasswordVisible = false;
-  
+
   int _resendTimer = 60;
   Timer? _timer;
 
@@ -56,8 +61,39 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (success) {
       _startResendTimer();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("A new code has been dispatched.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("A new recovery code has been dispatched.")),
+        );
       }
+    }
+  }
+
+  void _submit() async {
+    final otp = _otpController.text.trim();
+    final newPassword = _passwordController.text.trim();
+
+    if (otp.isEmpty || otp.length < 6) {
+      UIUtils.showErrorDialog(context, "Please enter the valid 6-digit recovery code");
+      return;
+    }
+    if (newPassword.isEmpty || newPassword.length < 6) {
+      UIUtils.showErrorDialog(context, "Password must be at least 6 characters");
+      return;
+    }
+
+    final vm = context.read<AuthViewModel>();
+    final success = await vm.resetPassword(widget.email, otp, newPassword);
+
+    if (!mounted) return;
+
+    if (success) {
+      UIUtils.showSuccessDialog(
+        context,
+        "Password updated successfully! Please sign in with your new credentials.",
+        onOk: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false),
+      );
+    } else if (vm.errorMessage != null) {
+      UIUtils.showErrorDialog(context, vm.errorMessage!);
     }
   }
 
@@ -66,154 +102,134 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     final vm = context.watch<AuthViewModel>();
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: AppColors.primaryGradient,
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildAppBar(),
-                Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24.0),
-                      child: _buildFormCard(vm),
-                    ),
-                  ),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: CustomAppBar(
+        title: "Verify & Reset",
+        onBackPressed: () => Navigator.pop(context),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: AppSpacing.pagePadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppSpacing.vGapMd,
+
+              // Top Header Graphic
+              Center(
+                child: const AppIconContainer(
+                  icon: Icons.shield_rounded,
+                  size: AppIcons.sizeXxl,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.accent,
+                  padding: 20,
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+              ).animate().scale(duration: 400.ms),
 
-  Widget _buildAppBar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
+              AppSpacing.vGapBase,
 
-  Widget _buildFormCard(AuthViewModel vm) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          const Icon(Icons.shield_rounded, size: 48, color: Colors.white),
-          const SizedBox(height: 24),
-          const Text("Verify Account", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5)),
-          const SizedBox(height: 8),
-          Text("Security code sent to ${widget.email}", 
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
-          const SizedBox(height: 40),
-          _buildTextField(
-            controller: _otpController,
-            label: "6-Digit Code",
-            icon: Icons.vpn_key_rounded,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-          ),
-          const SizedBox(height: 20),
-          _buildTextField(
-            controller: _passwordController,
-            label: "New Password",
-            icon: Icons.lock_rounded,
-            isPassword: true,
-            obscureText: !_isPasswordVisible,
-            onSuffixTap: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-          ),
-          const SizedBox(height: 16),
-          Theme(
-            data: ThemeData.dark(),
-            child: FlutterPwValidator(
-              controller: _passwordController,
-              minLength: 6,
-              uppercaseCharCount: 1,
-              numericCharCount: 1,
-              width: 400,
-              height: 120,
-              onSuccess: () {},
-              onFail: () {},
-            ),
-          ),
-          const SizedBox(height: 32),
-          if (_resendTimer > 0)
-            Text("Resend code in ${_resendTimer}s", style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.bold))
-          else
-            TextButton(
-              onPressed: vm.isLoading ? null : _resendOTP,
-              child: const Text("RESEND CODE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
-            ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: vm.isLoading ? null : () async {
-              final success = await vm.resetPassword(widget.email, _otpController.text.trim(), _passwordController.text.trim());
-              if (!context.mounted) return;
-              if (success) {
-                if (!mounted) return;
-                UIUtils.showSuccessDialog(context, "Password updated successfully! Please sign in with your new password.", onOk: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false));
-              } else if (vm.errorMessage != null) {
-                if (!mounted) return;
-                UIUtils.showErrorDialog(context, vm.errorMessage!);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.primary),
-            child: vm.isLoading 
-                ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)) 
-                : const Text("UPDATE PASSWORD", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.1, end: 0);
-  }
+              Center(
+                child: Text(
+                  "Verify Account",
+                  style: AppTypography.pageTitle,
+                  textAlign: TextAlign.center,
+                ),
+              ).animate().fadeIn(delay: 100.ms),
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool isPassword = false,
-    bool obscureText = false,
-    VoidCallback? onSuffixTap,
-    TextInputType? keyboardType,
-    int? maxLength,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      maxLength: maxLength,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        prefixIcon: Icon(icon, color: Colors.white70),
-        counterStyle: const TextStyle(color: Colors.white60, fontSize: 10),
-        suffixIcon: isPassword 
-            ? IconButton(icon: Icon(obscureText ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.white70), onPressed: onSuffixTap)
-            : null,
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.1),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              AppSpacing.vGapXs,
+
+              Center(
+                child: Text(
+                  "Security code sent to ${widget.email}. Enter the code below to set your new password.",
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                ),
+              ).animate().fadeIn(delay: 150.ms),
+
+              AppSpacing.vGapLg,
+
+              // Form Card
+              StandardCard(
+                padding: AppSpacing.paddingLg,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("6-Digit Code", style: AppTypography.fieldLabel),
+                    AppSpacing.vGapXs,
+                    ModernTextField(
+                      controller: _otpController,
+                      label: "Recovery Code",
+                      hint: "Enter 6-digit code",
+                      prefixIcon: Icons.vpn_key_rounded,
+                      keyboardType: TextInputType.number,
+                    ),
+
+                    AppSpacing.vGapBase,
+
+                    Text("New Password", style: AppTypography.fieldLabel),
+                    AppSpacing.vGapXs,
+                    ModernTextField(
+                      controller: _passwordController,
+                      label: "New Password",
+                      hint: "Enter new password",
+                      prefixIcon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                    ),
+
+                    AppSpacing.vGapBase,
+
+                    // Password Requirements Validator
+                    FlutterPwValidator(
+                      controller: _passwordController,
+                      minLength: 6,
+                      uppercaseCharCount: 1,
+                      numericCharCount: 1,
+                      width: 400,
+                      height: 110,
+                      onSuccess: () {},
+                      onFail: () {},
+                    ),
+
+                    AppSpacing.vGapBase,
+
+                    // Resend Timer Row
+                    Center(
+                      child: _resendTimer > 0
+                          ? Text(
+                              "Resend code in ${_resendTimer}s",
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : TextButton(
+                              onPressed: vm.isLoading ? null : _resendOTP,
+                              child: Text(
+                                "RESEND CODE",
+                                style: AppTypography.caption.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ),
+                    ),
+
+                    AppSpacing.vGapBase,
+
+                    PrimaryButton(
+                      text: "UPDATE PASSWORD",
+                      isLoading: vm.isLoading,
+                      onPressed: _submit,
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0),
+
+              AppSpacing.vGapXl,
+            ],
+          ),
+        ),
       ),
     );
   }

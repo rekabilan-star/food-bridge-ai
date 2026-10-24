@@ -3,9 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_icons.dart';
 import '../../../core/utils/ui_utils.dart';
 import 'reset_password_screen.dart';
-import '../common/widgets/glass_container.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/standard_card.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -49,103 +55,119 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final vm = context.watch<AuthViewModel>();
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: AppColors.primaryGradient,
-              ),
-            ),
-          ),
-          SafeArea(
+      backgroundColor: AppColors.backgroundLight,
+      appBar: CustomAppBar(
+        title: "Forgot Password",
+        onBackPressed: () => Navigator.pop(context),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: AppSpacing.pagePadding,
+          child: Form(
+            key: _formKey,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildAppBar(),
-                Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildFormCard(vm),
-                          const SizedBox(height: 40),
-                        ],
+                AppSpacing.vGapXl,
+
+                // Top Header Graphic
+                Center(
+                  child: const AppIconContainer(
+                    icon: Icons.lock_reset_rounded,
+                    size: AppIcons.sizeXxl,
+                    color: AppColors.primary,
+                    backgroundColor: AppColors.accent,
+                    padding: 20,
+                  ),
+                ).animate().scale(duration: 400.ms),
+
+                AppSpacing.vGapBase,
+
+                Center(
+                  child: Text(
+                    "Reset Password",
+                    style: AppTypography.pageTitle,
+                    textAlign: TextAlign.center,
+                  ),
+                ).animate().fadeIn(delay: 100.ms),
+
+                AppSpacing.vGapXs,
+
+                Center(
+                  child: Text(
+                    "Enter your registered email address and we'll send you a recovery code to verify your account.",
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                  ),
+                ).animate().fadeIn(delay: 150.ms),
+
+                AppSpacing.vGapXl,
+
+                // Main Form Card
+                StandardCard(
+                  padding: AppSpacing.paddingLg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Registered Email", style: AppTypography.fieldLabel),
+                      AppSpacing.vGapXs,
+                      ModernTextField(
+                        controller: _emailController,
+                        label: "Email Address",
+                        hint: "donor@example.com",
+                        prefixIcon: Icons.alternate_email_rounded,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return "Please enter your registered email";
+                          }
+                          if (!v.contains('@') || !v.contains('.')) {
+                            return "Please enter a valid email address";
+                          }
+                          return null;
+                        },
+                      ),
+
+                      AppSpacing.vGapLg,
+
+                      PrimaryButton(
+                        text: "SEND RECOVERY CODE",
+                        isLoading: vm.isLoading,
+                        onPressed: _submit,
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0),
+
+                AppSpacing.vGapLg,
+
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      "Remember your password? ",
+                      style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Text(
+                        "Sign In",
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
+
+                AppSpacing.vGapXl,
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFormCard(AuthViewModel vm) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(32),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.lock_reset_rounded, size: 48, color: Colors.white),
-            ).animate().scale(duration: 500.ms),
-            const SizedBox(height: 24),
-            const Text("Reset Password", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 12),
-            const Text("Enter your registered email address and we'll send you a recovery code.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)),
-            const SizedBox(height: 40),
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: "Email Address",
-                labelStyle: const TextStyle(color: Colors.white70),
-                prefixIcon: const Icon(Icons.alternate_email_rounded, color: Colors.white70),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.1),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              ),
-              validator: (v) => v!.isEmpty || !v.contains('@') ? "Enter a valid email" : null,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: vm.isLoading ? null : _submit,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.primary),
-              child: vm.isLoading 
-                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)) 
-                  : const Text("SEND RECOVERY CODE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ],
         ),
       ),
-    ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.1, end: 0);
+    );
   }
 }
