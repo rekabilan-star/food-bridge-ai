@@ -1,12 +1,21 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
-import 'dart:async';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/secondary_button.dart';
+import '../common/widgets/status_badge.dart';
+import '../common/widgets/app_loading_indicator.dart';
 import 'qr_scanner_screen.dart';
 import 'delivery_confirmation_screen.dart';
 import '../common/chat_screen.dart';
@@ -25,6 +34,7 @@ class NgoTrackingScreen extends StatefulWidget {
 class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
   final MapController _mapController = MapController();
   StreamSubscription<Position>? _positionStream;
+  bool _isActionLoading = false;
 
   @override
   void initState() {
@@ -49,7 +59,7 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
 
     debugPrint('[GPS] Starting NGO tracking stream');
     _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position position) {
-      debugPrint('[GPS] NGO Position update: Lat ${position.latitude}, Lng ${position.longitude}, Acc ${position.accuracy}m');
+      debugPrint('[GPS] NGO Position update: Lat ${position.latitude}, Lng ${position.longitude}');
       if (mounted) {
         context.read<DonationViewModel>().updateNgoLocation(position.latitude, position.longitude);
       }
@@ -61,9 +71,10 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
     final donation = context.watch<DonationViewModel>().currentDonation;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Navigate to Donor")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(title: "Rescue Navigation"),
       body: donation == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoadingIndicator(message: "Loading rescue details & route...")
           : Stack(
               children: [
                 FlutterMap(
@@ -81,18 +92,96 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
                       markers: [
                         Marker(
                           point: LatLng(donation.latitude, donation.longitude),
-                          width: 40,
-                          height: 40,
-                          child: const Icon(Icons.location_on, color: Colors.green, size: 40),
+                          width: 48,
+                          height: 48,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 28),
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
+
+                // Top floating status pill
+                Positioned(
+                  top: AppSpacing.md,
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  child: _buildTopStatusPill(donation),
+                ),
+
+                // Bottom Action & Mission Panel
                 _buildActionPanel(donation),
               ],
             ),
     );
+  }
+
+  Widget _buildTopStatusPill(DonationModel donation) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        boxShadow: AppShadows.card,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.navigation_rounded, color: AppColors.primary, size: 16),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _getMissionSubtitle(donation.status),
+              style: AppTypography.captionBold.copyWith(color: AppColors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          StatusBadge(
+            status: donation.status,
+            label: StatusUtils.formatStatusLabel(donation.status).toUpperCase(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getMissionSubtitle(String status) {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return 'Mission Assigned • Ready to depart';
+      case 'on_the_way':
+        return 'En Route to Donor Location';
+      case 'arrived':
+        return 'Arrived at Pickup • Scan Donor QR';
+      case 'picked_up':
+        return 'Food Collected • Deliver to Distribution';
+      case 'completed':
+        return 'Mission Accomplished';
+      default:
+        return 'Rescue in Progress';
+    }
   }
 
   Widget _buildActionPanel(DonationModel donation) {
@@ -101,115 +190,209 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: AppRadius.sheetTop,
+          boxShadow: AppShadows.elevated,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+              ),
+            ),
+
+            // Donor and Food Header
             Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(donation.foodName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      Text(donation.pickupAddress, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                      Text(donation.foodName, style: AppTypography.subsectionHeading),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              donation.pickupAddress,
+                              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
-                    receiverId: donation.donorId,
-                    donationId: donation.id,
-                    receiverName: donation.donorName ?? "Donor",
-                  ))),
-                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.blue),
-                ),
-                IconButton(
-                  onPressed: () => IntentUtils.makePhoneCall(donation.donorPhone ?? ''),
-                  style: IconButton.styleFrom(backgroundColor: Colors.blue[50]),
-                  icon: const Icon(Icons.phone, color: Colors.blue),
-                ),
+                // Action Buttons: Chat, Call, External Map
+                if (donation.donorId.isNotEmpty)
+                  IconButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          receiverId: donation.donorId,
+                          donationId: donation.id,
+                          receiverName: donation.donorName ?? "Donor",
+                        ),
+                      ),
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    ),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary, size: 20),
+                    tooltip: "Chat with Donor",
+                  ),
+                const SizedBox(width: 4),
+                if (donation.donorPhone != null && donation.donorPhone!.isNotEmpty)
+                  IconButton(
+                    onPressed: () => IntentUtils.makePhoneCall(donation.donorPhone!),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.success.withValues(alpha: 0.1),
+                    ),
+                    icon: const Icon(Icons.phone_rounded, color: AppColors.success, size: 20),
+                    tooltip: "Call Donor",
+                  ),
+                const SizedBox(width: 4),
                 IconButton(
                   onPressed: () => IntentUtils.openMapNavigation(donation.latitude, donation.longitude),
-                  style: IconButton.styleFrom(backgroundColor: Colors.green[50]),
-                  icon: const Icon(Icons.navigation, color: Colors.green),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.accent.withValues(alpha: 0.4),
+                  ),
+                  icon: const Icon(Icons.directions_rounded, color: AppColors.primary, size: 20),
+                  tooltip: "Open External Navigation",
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            if (donation.status == 'accepted')
-              _buildPrimaryButton("START JOURNEY", Icons.play_arrow, Colors.blue, () {
-                context.read<DonationViewModel>().updateDonationStatus(donation.id, 'on_the_way');
-              })
-            else if (donation.status == 'on_the_way')
-              _buildPrimaryButton("I HAVE ARRIVED", Icons.location_on, Colors.orange, () {
-                context.read<DonationViewModel>().updateDonationStatus(donation.id, 'arrived');
-              })
-            else if (donation.status == 'arrived')
-              _buildPrimaryButton("SCAN PICKUP QR", Icons.qr_code_scanner, AppColors.ngoColor, () async {
-                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => QrScannerScreen(donationId: donation.id)));
-                if (!mounted) return;
-                if (result == true) {
-                   UIUtils.showSuccessDialog(context, "Pickup Verified Successfully!");
-                }
-              })
-            else if (donation.status == 'picked_up')
-                _buildPrimaryButton("PROCEED TO DELIVERY", Icons.local_shipping, Colors.teal, () {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => DeliveryConfirmationScreen(donation: donation)));
-                })
-            else if (donation.status == 'completed') ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.green[300]!),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      "✓ Donation Completed",
-                      style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildPrimaryButton("RATE DONOR", Icons.star_outline, Colors.amber.shade800, () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => RatingScreen(
-                  donationId: donation.id,
-                  toUserId: donation.donorId,
-                  toUserName: donation.donorName ?? "Donor",
-                )));
-              }),
-            ],
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // Dynamic Step Action Button
+            _buildStepActionButton(donation),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPrimaryButton(String text, IconData icon, Color color, VoidCallback onPressed) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        minimumSize: const Size(double.infinity, 56),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      icon: Icon(icon),
-      label: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-    );
+  Widget _buildStepActionButton(DonationModel donation) {
+    final status = donation.status.toLowerCase();
+    final dVM = context.read<DonationViewModel>();
+
+    if (status == 'accepted') {
+      return PrimaryButton(
+        text: "START JOURNEY",
+        icon: Icons.play_arrow_rounded,
+        isLoading: _isActionLoading,
+        onPressed: _isActionLoading
+            ? null
+            : () async {
+                setState(() => _isActionLoading = true);
+                await dVM.updateDonationStatus(donation.id, 'on_the_way');
+                if (mounted) setState(() => _isActionLoading = false);
+              },
+      );
+    } else if (status == 'on_the_way') {
+      return PrimaryButton(
+        text: "I HAVE ARRIVED AT PICKUP",
+        icon: Icons.location_on_rounded,
+        isLoading: _isActionLoading,
+        onPressed: _isActionLoading
+            ? null
+            : () async {
+                setState(() => _isActionLoading = true);
+                await dVM.updateDonationStatus(donation.id, 'arrived');
+                if (mounted) setState(() => _isActionLoading = false);
+              },
+      );
+    } else if (status == 'arrived') {
+      return PrimaryButton(
+        text: "SCAN PICKUP QR CODE",
+        icon: Icons.qr_code_scanner_rounded,
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => QrScannerScreen(donationId: donation.id)),
+          );
+          if (!mounted) return;
+          if (result == true) {
+            UIUtils.showSuccessDialog(context, "Pickup Handshake Verified! Food marked as Picked Up.");
+          }
+        },
+      );
+    } else if (status == 'picked_up') {
+      return PrimaryButton(
+        text: "PROCEED TO DELIVERY",
+        icon: Icons.local_shipping_rounded,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DeliveryConfirmationScreen(donation: donation)),
+          );
+        },
+      );
+    } else if (status == 'completed') {
+      return Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  "Donation Successfully Rescued & Completed",
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SecondaryButton(
+            text: "RATE DONOR EXPERIENCE",
+            icon: Icons.star_rate_rounded,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RatingScreen(
+                    donationId: donation.id,
+                    toUserId: donation.donorId,
+                    toUserName: donation.donorName ?? "Donor",
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

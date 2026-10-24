@@ -70,6 +70,7 @@ class PrimaryButton extends StatelessWidget {
                     ],
                   )
                 : Row(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (icon != null) ...[
@@ -80,10 +81,14 @@ class PrimaryButton extends StatelessWidget {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                       ],
-                      Text(
-                        text,
-                        style: AppTypography.button.copyWith(
-                          color: effectiveDisabled ? const Color(0xFF9E95AD) : Colors.white,
+                      Flexible(
+                        child: Text(
+                          text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.button.copyWith(
+                            color: effectiveDisabled ? const Color(0xFF9E95AD) : Colors.white,
+                          ),
                         ),
                       ),
                     ],

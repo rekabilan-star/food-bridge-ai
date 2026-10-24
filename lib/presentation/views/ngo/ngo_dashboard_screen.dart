@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../viewmodels/emergency_viewmodel.dart';
 import '../../viewmodels/notification_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
 import 'ngo_donation_requests_screen.dart';
 import 'ngo_tracking_screen.dart';
-import '../common/verification_scanner_screen.dart';
 import 'donation_details_screen.dart';
 import 'emergency_request_screen.dart';
 import '../../../data/models/donation_model.dart';
-import '../common/widgets/shimmer_loading.dart';
 import '../common/widgets/donation_card.dart';
+import '../common/widgets/stat_card.dart';
+import '../common/widgets/section_heading.dart';
+import '../common/widgets/empty_state.dart';
+import '../common/widgets/app_loading_indicator.dart';
 import '../common/widgets/user_profile_modal.dart';
-import '../../../core/utils/ui_utils.dart';
-
-import 'dart:async';
-import 'package:geolocator/geolocator.dart';
 
 class NgoDashboardScreen extends StatefulWidget {
   const NgoDashboardScreen({super.key});
@@ -46,6 +49,7 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
     nVM.initSocketListeners();
     await Future.wait([
       dVM.fetchNgoAssignedDonations(),
+      dVM.fetchAvailableDonations(),
       eVM.fetchActiveRequests(),
       nVM.fetchNotifications(refresh: true),
     ]);
@@ -60,66 +64,60 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
       backgroundColor: AppColors.backgroundLight,
       body: RefreshIndicator(
         onRefresh: _refreshData,
-        color: AppColors.ngoColor,
+        color: AppColors.primary,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           slivers: [
             _buildAppBar(context, user),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. High Impact Emergency Broadcast Button
-                    _buildEmergencyButton(context).animate().scale(duration: 350.ms),
+                    // 0. Welcome Header & Availability Toggle
+                    _buildWelcomeHeader(context, user).animate().fadeIn(duration: 300.ms),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // 1. High Impact Emergency Broadcast Action
+                    _buildEmergencyBroadcastCard(context).animate().scale(duration: 350.ms),
+
+                    const SizedBox(height: AppSpacing.md),
 
                     // 2. AI Surplus Food Explorer Card
-                    _buildStatusCard(context).animate().fadeIn(delay: 150.ms),
+                    _buildSurplusExplorerCard(context, viewModel).animate().fadeIn(delay: 100.ms),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.lg),
 
-                    // 3. Operational Metrics Ribbon
-                    _buildMetricsRibbon(viewModel).animate().fadeIn(delay: 250.ms),
+                    // 3. Operational Metrics
+                    _buildMetricsSection(viewModel).animate().fadeIn(delay: 200.ms),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.xl),
 
                     // 4. Active Rescue Tasks Section Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Text(
-                              "Active Rescue Tasks",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.3),
-                            ),
-                            SizedBox(width: 8),
-                            Icon(Icons.circle, color: Colors.green, size: 8),
-                          ],
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen()));
-                          },
-                          child: const Text("View All", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.ngoColor)),
-                        ),
-                      ],
+                    SectionHeading(
+                      title: "Active Rescue Tasks",
+                      actionText: "Opportunities",
+                      onActionTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen()),
+                        );
+                      },
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.sm),
 
-                    // Active Tasks List or Loading
+                    // Active Tasks List or Loading / Empty State
                     if (viewModel.isLoading && viewModel.assignedDonations.isEmpty)
-                      const ShimmerListLoading()
+                      const AppLoadingIndicator(message: "Loading active rescue assignments...")
                     else if (viewModel.assignedDonations.isEmpty)
-                      _buildEmptyState()
+                      _buildEmptyTasksState(context)
                     else
                       _buildActiveTasksList(viewModel.assignedDonations),
 
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -137,30 +135,35 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
       pinned: true,
       centerTitle: false,
       elevation: 0,
-      surfaceTintColor: Colors.white,
-      backgroundColor: Colors.white,
-      titleSpacing: 12,
-      title: const FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          children: [
-            Icon(Icons.shield_rounded, color: AppColors.ngoColor, size: 22),
-            SizedBox(width: 6),
-            Text(
-              "Rescue Control",
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: -0.5, color: AppColors.ngoColor),
+      surfaceTintColor: AppColors.surfaceLight,
+      backgroundColor: AppColors.surfaceLight,
+      titleSpacing: AppSpacing.md,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-          ],
-        ),
+            child: const Icon(Icons.shield_rounded, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            "Rescue Control",
+            style: AppTypography.pageTitle.copyWith(fontSize: 18),
+          ),
+        ],
       ),
       actions: [
-        _buildAvailabilityToggle(context, user),
         Stack(
           alignment: Alignment.center,
           children: [
             IconButton(
-              icon: const Icon(Icons.notifications_none_rounded, size: 24, color: AppColors.textPrimary),
+              icon: const Icon(Icons.notifications_none_rounded, size: 22, color: AppColors.textPrimary),
               onPressed: () => Navigator.pushNamed(context, '/notifications'),
+              tooltip: "Notifications",
             ),
             if (nVM.unreadCount > 0)
               Positioned(
@@ -175,13 +178,9 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
           ],
         ),
         IconButton(
-          icon: const Icon(Icons.qr_code_scanner_rounded, size: 22, color: AppColors.textPrimary),
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScannerScreen())),
-          tooltip: "Verify Certificate",
-        ),
-        IconButton(
           icon: const Icon(Icons.chat_bubble_outline_rounded, size: 22, color: AppColors.textPrimary),
           onPressed: () => Navigator.pushNamed(context, '/chats'),
+          tooltip: "Chats",
         ),
         IconButton(
           icon: const Icon(Icons.logout_rounded, size: 22, color: AppColors.textPrimary),
@@ -194,115 +193,137 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
         GestureDetector(
           onTap: () => UserProfileModal.show(context),
           child: CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.ngoColor,
+            radius: 15,
+            backgroundColor: AppColors.primary,
             child: Text(
               user?.name != null && user!.name.isNotEmpty ? user.name[0].toUpperCase() : "N",
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: AppTypography.captionBold.copyWith(color: Colors.white),
             ),
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: AppSpacing.sm),
+      ],
+    );
+  }
+
+  Widget _buildWelcomeHeader(BuildContext context, dynamic user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Welcome, ${user?.name ?? 'Partner'}",
+                style: AppTypography.pageTitle.copyWith(fontSize: 18),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                "NGO Rescue Control & Dispatch",
+                style: AppTypography.caption,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        _buildAvailabilityToggle(context, user),
       ],
     );
   }
 
   Widget _buildAvailabilityToggle(BuildContext context, dynamic user) {
     String status = user?.availabilityStatus ?? 'Available';
-    Color color = status == 'Available' ? Colors.green : (status == 'Busy' ? Colors.orange : Colors.grey);
+    Color color = status == 'Available'
+        ? AppColors.success
+        : (status == 'Busy' ? AppColors.warning : AppColors.textSecondary);
 
     return PopupMenuButton<String>(
       onSelected: (value) {},
       itemBuilder: (context) => [
         const PopupMenuItem(value: 'Available', child: Text("🟢 Available")),
         const PopupMenuItem(value: 'Busy', child: Text("🟡 Busy")),
-        const PopupMenuItem(value: 'Offline', child: Text("🔴 Offline")),
+        const PopupMenuItem(value: 'Offline', child: Text("⚪ Offline")),
       ],
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.full),
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(radius: 4, backgroundColor: color),
             const SizedBox(width: 6),
-            Text(status, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+            Text(
+              status,
+              style: AppTypography.captionBold.copyWith(color: color, fontSize: 11),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildEmergencyButton(BuildContext context) {
+  Widget _buildEmergencyBroadcastCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.error,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          )
-        ],
-      ),
-      child: ElevatedButton.icon(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmergencyRequestScreen())),
-        icon: const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
-        label: const Text("BROADCAST EMERGENCY ALERT", style: TextStyle(letterSpacing: 0.5, fontWeight: FontWeight.w900, fontSize: 13)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFEA2027),
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 54),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 0,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.ngoColor, Color(0xFF7E22CE)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.ngoColor.withValues(alpha: 0.2),
+            color: AppColors.error.withValues(alpha: 0.25),
             blurRadius: 14,
-            offset: const Offset(0, 6),
-          )
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen())),
-          borderRadius: BorderRadius.circular(22),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const EmergencyRequestScreen()),
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.explore_rounded, color: Colors.white, size: 24),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.campaign_rounded, color: Colors.white, size: 24),
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Explore Surplus Requests", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
-                      SizedBox(height: 2),
-                      Text("AI matched 4 food pickups nearby", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(
+                        "BROADCAST EMERGENCY ALERT",
+                        style: AppTypography.button.copyWith(
+                          color: Colors.white,
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Notify nearby donors of urgent community hunger needs",
+                        style: AppTypography.caption.copyWith(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -315,39 +336,101 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
     );
   }
 
-  Widget _buildMetricsRibbon(DonationViewModel vm) {
-    return Row(
-      children: [
-        _buildMiniMetricCard("Active Pickups", "${vm.assignedDonations.length}", Icons.local_shipping_rounded, AppColors.ngoColor),
-        const SizedBox(width: 10),
-        _buildMiniMetricCard("Meals Rescued", "450+", Icons.restaurant_rounded, Colors.green),
-        const SizedBox(width: 10),
-        _buildMiniMetricCard("Avg Time", "12 mins", Icons.timer_rounded, Colors.orange),
-      ],
+  Widget _buildSurplusExplorerCard(BuildContext context, DonationViewModel vm) {
+    final availableCount = vm.donations.length;
+    final countText = availableCount > 0 ? "$availableCount opportunities available" : "Check surplus pickups nearby";
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: AppColors.primaryGradient),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen()),
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: const Icon(Icons.explore_rounded, color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Explore Surplus Opportunities",
+                        style: AppTypography.sectionHeading.copyWith(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        countText,
+                        style: AppTypography.caption.copyWith(
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildMiniMetricCard(String title, String val, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
-          ],
+  Widget _buildMetricsSection(DonationViewModel vm) {
+    final activeCount = vm.assignedDonations.where((d) => d.status != 'completed').length;
+    final completedCount = vm.assignedDonations.where((d) => d.status == 'completed').length;
+    final totalServings = vm.assignedDonations.fold<int>(0, (sum, d) => sum + d.membersServed);
+
+    return Row(
+      children: [
+        Expanded(
+          child: StatCard(
+            label: "Active Tasks",
+            value: "$activeCount",
+            icon: Icons.local_shipping_rounded,
+            iconColor: AppColors.primary,
+          ),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 6),
-            Text(val, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textPrimary)),
-            Text(title, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-          ],
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: StatCard(
+            label: "Rescues Done",
+            value: "$completedCount",
+            icon: Icons.check_circle_rounded,
+            iconColor: AppColors.success,
+          ),
         ),
-      ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: StatCard(
+            label: "Servings",
+            value: totalServings > 0 ? "$totalServings" : "0",
+            icon: Icons.restaurant_rounded,
+            iconColor: AppColors.warning,
+          ),
+        ),
+      ],
     );
   }
 
@@ -362,9 +445,9 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
       itemCount: donations.length,
       itemBuilder: (context, index) {
         final donation = donations[index];
-        final status = StatusUtils.formatStatusLabel(donation.status);
-        
-        String distText = "Distance unavailable";
+        final status = _formatCardStatus(donation.status);
+
+        String distText = "Within 20 km";
         String etaVal = "15 mins";
         if (userLat != 0 && userLng != 0 && donation.latitude != 0 && donation.longitude != 0) {
           final meters = Geolocator.distanceBetween(userLat, userLng, donation.latitude, donation.longitude);
@@ -383,49 +466,72 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
           timeAgoVal = "${diff.inHours} hrs ago";
         }
 
-        return DonationCard(
-          title: donation.foodName,
-          subtitle: "${donation.membersServed} Served • Pickup: ${donation.pickupAddress}",
-          status: status,
-          timeAgo: timeAgoVal,
-          etaText: etaVal,
-          distanceText: distText,
-          imageUrl: donation.imageUrl,
-          onTrackTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)));
-          },
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)));
-          },
-        ).animate().fadeIn(duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300))).slideY(begin: 0.08, end: 0, duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300)), curve: Curves.easeOut);
+        return Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: DonationCard(
+            title: donation.foodName,
+            subtitle: "${donation.membersServed} Served • Pickup: ${donation.pickupAddress}",
+            status: status,
+            timeAgo: timeAgoVal,
+            etaText: etaVal,
+            distanceText: distText,
+            imageUrl: donation.imageUrl,
+            onTrackTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => NgoTrackingScreen(donationId: donation.id)),
+              );
+            },
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)),
+              );
+            },
+          ),
+        ).animate().fadeIn(
+              duration: 350.ms,
+              delay: Duration(milliseconds: (index * 60).clamp(0, 300)),
+            );
       },
     );
   }
 
-  Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border, width: 1.2),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.assignment_outlined, size: 44, color: AppColors.ngoColor.withValues(alpha: 0.5)),
-          const SizedBox(height: 10),
-          const Text(
-            "No Active Rescue Tasks",
-            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            "Tap 'Explore Surplus Requests' above to claim food",
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
-        ],
-      ),
+  String _formatCardStatus(String rawStatus) {
+    switch (rawStatus.toLowerCase()) {
+      case 'waiting':
+        return 'Pending';
+      case 'accepted':
+        return 'Accepted';
+      case 'on_the_way':
+        return 'In Transit';
+      case 'arrived':
+        return 'Arrived';
+      case 'picked_up':
+        return 'Picked Up';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'expired':
+        return 'Expired';
+      default:
+        return rawStatus;
+    }
+  }
+
+  Widget _buildEmptyTasksState(BuildContext context) {
+    return EmptyState(
+      icon: Icons.assignment_outlined,
+      title: "No Active Rescue Tasks",
+      message: "You have no food rescue missions assigned right now. Explore available surplus requests to claim food.",
+      actionText: "EXPLORE SURPLUS FOOD",
+      onActionPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const NgoDonationRequestsScreen()),
+        );
+      },
     );
   }
 }

@@ -47,6 +47,7 @@ class SecondaryButton extends StatelessWidget {
           onTap: onPressed,
           child: Center(
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (icon != null) ...[
@@ -57,10 +58,14 @@ class SecondaryButton extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                 ],
-                Text(
-                  text,
-                  style: AppTypography.button.copyWith(
-                    color: isDisabled ? const Color(0xFF9E95AD) : (textColor ?? AppColors.textPrimary),
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.button.copyWith(
+                      color: isDisabled ? const Color(0xFF9E95AD) : (textColor ?? AppColors.textPrimary),
+                    ),
                   ),
                 ),
               ],

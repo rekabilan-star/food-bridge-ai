@@ -3,11 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/standard_card.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/secondary_button.dart';
+import '../common/widgets/app_loading_indicator.dart';
+import '../common/widgets/empty_state.dart';
 import 'donation_details_screen.dart';
 
 class NgoDonationRequestsScreen extends StatefulWidget {
@@ -19,6 +30,7 @@ class NgoDonationRequestsScreen extends StatefulWidget {
 
 class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isAccepting = false;
 
   @override
   void initState() {
@@ -31,61 +43,73 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Nearby Opportunities"),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Search by food name...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: EdgeInsets.zero,
-              ),
-              onSubmitted: (value) {
-                context.read<DonationViewModel>().fetchAvailableDonations(search: value);
-              },
-            ),
-          ),
-        ),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(
+        title: "Nearby Opportunities",
       ),
       body: RefreshIndicator(
+        color: AppColors.primary,
         onRefresh: () async {
-          await context.read<DonationViewModel>().fetchAvailableDonations(search: _searchController.text.trim());
+          await context.read<DonationViewModel>().fetchAvailableDonations(
+            search: _searchController.text.trim(),
+          );
         },
         child: Column(
           children: [
+            _buildSearchAndFilter(),
             _buildAiBanner(),
             Expanded(
               child: Consumer<DonationViewModel>(
                 builder: (context, viewModel, _) {
                   if (viewModel.isLoading && viewModel.donations.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const AppLoadingIndicator(
+                      message: "Searching for surplus food opportunities...",
+                    );
                   }
-                  
+
                   if (viewModel.donations.isEmpty) {
                     return SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       child: SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.6,
-                        child: const Center(child: Text("No donations available at the moment.")),
+                        height: MediaQuery.of(context).size.height * 0.55,
+                        child: EmptyState(
+                          icon: Icons.explore_off_rounded,
+                          title: "No Available Donations",
+                          message: _searchController.text.isNotEmpty
+                              ? "No food donations match '${_searchController.text}'. Try another search query."
+                              : "No food rescue opportunities nearby within 20 KM at this moment. Check back soon!",
+                        ),
                       ),
                     );
                   }
 
                   return ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
                     itemCount: viewModel.donations.length,
                     itemBuilder: (context, index) {
-                      return _buildRequestCard(viewModel.donations[index]).animate().fadeIn(duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300))).slideY(begin: 0.08, end: 0, duration: 350.ms, delay: Duration(milliseconds: (index * 60).clamp(0, 300)), curve: Curves.easeOut);
+                      final donation = viewModel.donations[index];
+                      return _buildOpportunityCard(donation)
+                          .animate()
+                          .fadeIn(
+                            duration: 350.ms,
+                            delay: Duration(milliseconds: (index * 50).clamp(0, 300)),
+                          )
+                          .slideY(
+                            begin: 0.06,
+                            end: 0,
+                            duration: 350.ms,
+                            delay: Duration(milliseconds: (index * 50).clamp(0, 300)),
+                            curve: Curves.easeOut,
+                          );
                     },
                   );
                 },
@@ -97,19 +121,51 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
     );
   }
 
+  Widget _buildSearchAndFilter() {
+    return Container(
+      color: AppColors.surfaceLight,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
+      child: ModernTextField(
+        controller: _searchController,
+        label: "Search Surplus Food",
+        hint: "Search by food name or category...",
+        prefixIcon: Icons.search_rounded,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (value) {
+          context.read<DonationViewModel>().fetchAvailableDonations(search: value.trim());
+        },
+      ),
+    );
+  }
+
   Widget _buildAiBanner() {
     return Container(
       width: double.infinity,
-      color: Colors.blue[50],
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.35),
+        border: const Border(
+          bottom: BorderSide(color: AppColors.border, width: 1),
+        ),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome, color: Colors.blue, size: 20),
-          const SizedBox(width: 12),
-          const Expanded(
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 16),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
             child: Text(
-              "AI is recommending these based on your location and food preferences.",
-              style: TextStyle(fontSize: 12, color: Colors.blue),
+              "Ranked by proximity within 20 KM, food freshness, and rescue urgency.",
+              style: AppTypography.caption.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -131,7 +187,7 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
     return '$rootServer$cleanPath';
   }
 
-  Widget _buildRequestCard(DonationModel donation) {
+  Widget _buildOpportunityCard(DonationModel donation) {
     final rawUrl = donation.imageUrl;
     final resolvedUrl = _resolveFoodImageUrl(rawUrl);
     final isLocalFile = rawUrl.isNotEmpty && File(rawUrl).existsSync();
@@ -145,101 +201,173 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
       distBadge = "${(meters / 1000).toStringAsFixed(1)} KM AWAY";
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+    final isExpired = donation.isExpired;
+    final bestBeforeFormatted = DateFormat('hh:mm a').format(donation.bestBeforeTime);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: StandardCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
         onTap: () => Navigator.push(
-          context, 
-          MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation))
+          context,
+          MaterialPageRoute(builder: (_) => DonationDetailsScreen(donation: donation)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      color: Colors.grey[200],
-                      child: resolvedUrl.isEmpty
-                          ? Icon(Icons.fastfood_rounded, color: Colors.grey[400], size: 32)
-                          : (isLocalFile
-                              ? Image.file(File(rawUrl), fit: BoxFit.cover)
-                              : Image.network(
-                                  resolvedUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Icon(Icons.fastfood_rounded, color: Colors.grey[400], size: 32),
-                                )),
-                    ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Image + Title + Badges
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    color: AppColors.accent.withValues(alpha: 0.25),
+                    child: resolvedUrl.isEmpty
+                        ? const Icon(Icons.fastfood_rounded, color: AppColors.primary, size: 32)
+                        : (isLocalFile
+                            ? Image.file(File(rawUrl), fit: BoxFit.cover)
+                            : Image.network(
+                                resolvedUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.fastfood_rounded, color: AppColors.primary, size: 32),
+                              )),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
-                              child: const Text("98% AI Score", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: AppColors.ngoColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                              child: Text(distBadge, style: const TextStyle(color: AppColors.ngoColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(donation.foodName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(donation.pickupAddress, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              Row(
-                children: [
-                  const Icon(Icons.people_outline, size: 16, color: Colors.grey),
-                  const SizedBox(width: 6),
-                  Text("Serves ${donation.membersServed} Members", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                  const Spacer(),
-                  const Icon(Icons.timer_outlined, size: 16, color: Colors.red),
-                  const SizedBox(width: 4),
-                  Text(
-                    "Best before ${donation.bestBeforeTime.hour}:${donation.bestBeforeTime.minute.toString().padLeft(2, '0')}", 
-                    style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w600)
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: () => _acceptDonationDirectly(donation),
-                icon: const Icon(Icons.check_circle_rounded, size: 18),
-                label: const Text("ACCEPT DONATION", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ngoColor,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
                 ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Badges
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              distBadge,
+                              style: AppTypography.captionBold.copyWith(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isExpired
+                                  ? AppColors.error.withValues(alpha: 0.1)
+                                  : AppColors.warning.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              isExpired ? "EXPIRED" : "BEST BEFORE $bestBeforeFormatted",
+                              style: AppTypography.captionBold.copyWith(
+                                color: isExpired ? AppColors.error : AppColors.warning,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        donation.foodName,
+                        style: AppTypography.subsectionHeading,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              donation.pickupAddress,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.sm),
+            const Divider(color: AppColors.border, height: 16),
+
+            // Servings + Category Row
+            Row(
+              children: [
+                const Icon(Icons.people_outline_rounded, size: 16, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  "Serves ${donation.membersServed} people",
+                  style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(
+                    donation.category,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // Action Button
+            if (isExpired)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                ),
+                child: Center(
+                  child: Text(
+                    "Food Donation Expired — Rescue Closed",
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              )
+            else
+              PrimaryButton(
+                text: "ACCEPT DONATION",
+                icon: Icons.check_circle_rounded,
+                isLoading: _isAccepting,
+                onPressed: _isAccepting ? null : () => _acceptDonationDirectly(donation),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -249,29 +377,58 @@ class _NgoDonationRequestsScreenState extends State<NgoDonationRequestsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Accept Donation?"),
-        content: Text("Accept '${donation.foodName}' and add it to your Rescue Control dashboard?"),
+        backgroundColor: AppColors.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: const Icon(Icons.handshake_rounded, color: AppColors.primary, size: 22),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text("Accept Donation?", style: AppTypography.sectionHeading),
+          ],
+        ),
+        content: Text(
+          "Accept '${donation.foodName}' (${donation.membersServed} servings)?\n\nThis task will be assigned to your organization and added to your Rescue Control dashboard.",
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
-          ElevatedButton(
+          SecondaryButton(
+            text: "CANCEL",
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          PrimaryButton(
+            text: "CONFIRM",
             onPressed: () async {
               Navigator.pop(ctx);
+              setState(() => _isAccepting = true);
               final viewModel = context.read<DonationViewModel>();
               final success = await viewModel.updateDonationStatus(donation.id, 'accepted');
               if (!mounted) return;
+              setState(() => _isAccepting = false);
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Donation Accepted! Navigating to Rescue Control..."))
+                  const SnackBar(
+                    content: Text("Donation Accepted! Navigating to Rescue Control..."),
+                    backgroundColor: AppColors.success,
+                  ),
                 );
                 Navigator.pushNamedAndRemoveUntil(context, '/ngo-dashboard', (route) => false);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(viewModel.errorMessage ?? "Failed to accept donation"))
+                  SnackBar(
+                    content: Text(viewModel.errorMessage ?? "Failed to accept donation"),
+                    backgroundColor: AppColors.error,
+                  ),
                 );
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),
-            child: const Text("ACCEPT & GO TO DASHBOARD"),
           ),
         ],
       ),

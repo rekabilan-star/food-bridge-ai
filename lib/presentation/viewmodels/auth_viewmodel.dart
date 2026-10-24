@@ -24,6 +24,12 @@ class AuthViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get biometricEnabled => _biometricEnabled;
 
+  @visibleForTesting
+  void setUser(UserModel? user) {
+    _user = user;
+    _safeNotify();
+  }
+
   bool _disposed = false;
 
   @override

@@ -5,6 +5,14 @@ import '../../viewmodels/emergency_viewmodel.dart';
 import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/utils/ui_utils.dart';
 import '../../../core/providers/location_provider_v2.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/standard_card.dart';
 
 class EmergencyRequestScreen extends StatefulWidget {
   const EmergencyRequestScreen({super.key});
@@ -19,10 +27,11 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   final _reasonController = TextEditingController();
   final _membersController = TextEditingController();
   final _addressController = TextEditingController();
-  
+
   String _foodType = 'Any';
   String _priority = 'High';
   DateTime _requiredBefore = DateTime.now().add(const Duration(hours: 3));
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -30,9 +39,11 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
-        locProvider.fetchLocation().then((_) {
-          _onLocationDetected();
-        });
+        if (locProvider.location == null) {
+          locProvider.fetchLocation().then((_) {
+            _onLocationDetected();
+          });
+        }
         locProvider.addListener(_onLocationDetected);
       }
     });
@@ -63,36 +74,43 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   }
 
   void _submit() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() && !_isSubmitting) {
+      setState(() => _isSubmitting = true);
       final locProvider = context.read<LocationProviderV2>();
       final lat = locProvider.location?.latitude ?? 13.0827;
       final lng = locProvider.location?.longitude ?? 80.2707;
 
       final success = await context.read<EmergencyViewModel>().createRequest(
-        EmergencyRequestModel(
-          id: '',
-          ngoId: '',
-          title: _titleController.text,
-          reason: _reasonController.text,
-          requiredMembers: int.parse(_membersController.text),
-          foodType: _foodType,
-          address: _addressController.text,
-          latitude: lat,
-          longitude: lng,
-          requiredBefore: _requiredBefore,
-          priority: _priority,
-          status: 'active',
-        )
-      );
+            EmergencyRequestModel(
+              id: '',
+              ngoId: '',
+              title: _titleController.text.trim(),
+              reason: _reasonController.text.trim(),
+              requiredMembers: int.tryParse(_membersController.text.trim()) ?? 10,
+              foodType: _foodType,
+              address: _addressController.text.trim(),
+              latitude: lat,
+              longitude: lng,
+              requiredBefore: _requiredBefore,
+              priority: _priority,
+              status: 'active',
+            ),
+          );
+
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
 
       if (success) {
-        if (mounted) {
-          UIUtils.showSuccessDialog(context, "Emergency Request Broadcasted!", onOk: () {
-            Navigator.pop(context);
-          });
-        }
+        UIUtils.showSuccessDialog(
+          context,
+          "Emergency broadcast sent successfully! Nearby donors and restaurants have been alerted.",
+          onOk: () => Navigator.pop(context),
+        );
       } else {
-        if (mounted) UIUtils.showErrorDialog(context, context.read<EmergencyViewModel>().errorMessage ?? "Failed to create request");
+        UIUtils.showErrorDialog(
+          context,
+          context.read<EmergencyViewModel>().errorMessage ?? "Failed to broadcast emergency request",
+        );
       }
     }
   }
@@ -100,96 +118,215 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final locProvider = context.watch<LocationProviderV2>();
+    final emergencyVM = context.watch<EmergencyViewModel>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Emergency Request")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(title: "Emergency Broadcast"),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Broadcast Emergency Need", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const Text("Donors near you will receive instant notifications.", style: TextStyle(color: Colors.grey, fontSize: 13)),
-              const SizedBox(height: 24),
-              TextFormField(
+              // Emergency Info Banner
+              StandardCard(
+                backgroundColor: AppColors.error.withValues(alpha: 0.06),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.campaign_rounded, color: AppColors.error, size: 24),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Immediate Community Hunger Need",
+                            style: AppTypography.subsectionHeading.copyWith(color: AppColors.error),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "All registered food donors and restaurants within 20 KM will receive high-priority alerts.",
+                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Title Field
+              ModernTextField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: "Request Title", hintText: "e.g., Food for flood victims"),
-                validator: (v) => v!.isEmpty ? "Enter title" : null,
+                label: "Request Title",
+                hint: "e.g., Food for flood relief camp or night shelter",
+                prefixIcon: Icons.title_rounded,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Please enter a title" : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Reason Field
+              ModernTextField(
                 controller: _reasonController,
-                decoration: const InputDecoration(labelText: "Reason / Context"),
+                label: "Reason & Context",
+                hint: "Describe who needs meals and the urgency...",
+                prefixIcon: Icons.notes_rounded,
                 maxLines: 3,
-                validator: (v) => v!.isEmpty ? "Enter reason" : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Please provide context" : null,
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Members & Food Type Row
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: TextFormField(
+                    child: ModernTextField(
                       controller: _membersController,
-                      decoration: const InputDecoration(labelText: "Members in Need"),
+                      label: "Members in Need",
+                      hint: "e.g., 50",
+                      prefixIcon: Icons.people_outline_rounded,
                       keyboardType: TextInputType.number,
-                      validator: (v) => v!.isEmpty ? "Enter number" : null,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _foodType,
-                      decoration: const InputDecoration(labelText: "Food Type"),
-                      items: ['Veg', 'Non-Veg', 'Any'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (v) => setState(() => _foodType = v!),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Food Type", style: AppTypography.fieldLabel),
+                        const SizedBox(height: AppSpacing.xs),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceLight,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value: _foodType,
+                              items: ['Any', 'Veg', 'Non-Veg']
+                                  .map((t) => DropdownMenuItem(value: t, child: Text(t, style: AppTypography.bodyMedium)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _foodType = v!),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _priority,
-                decoration: const InputDecoration(labelText: "Priority Level"),
-                items: ['High', 'Medium', 'Low'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                onChanged: (v) => setState(() => _priority = v!),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Priority Level
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Priority Level", style: AppTypography.fieldLabel),
+                  const SizedBox(height: AppSpacing.xs),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: _priority,
+                        items: ['High', 'Medium', 'Low']
+                            .map((p) => DropdownMenuItem(
+                                  value: p,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.circle,
+                                        size: 10,
+                                        color: p == 'High'
+                                            ? AppColors.error
+                                            : (p == 'Medium' ? AppColors.warning : AppColors.success),
+                                      ),
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Text(p, style: AppTypography.bodyMedium),
+                                    ],
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _priority = v!),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Delivery Address
+              ModernTextField(
                 controller: _addressController,
-                decoration: InputDecoration(
-                  labelText: "Delivery Address", 
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                  suffixIcon: locProvider.isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.my_location_rounded, color: Colors.red),
-                          tooltip: "Auto-detect Live GPS Location",
-                          onPressed: () async {
-                            await locProvider.fetchLocation();
-                            if (mounted && locProvider.location != null) {
-                              setState(() {
-                                _addressController.text = locProvider.location!.fullAddress;
-                              });
-                            }
-                          },
+                label: "Distribution / Delivery Address",
+                hint: "Enter destination address...",
+                prefixIcon: Icons.location_on_outlined,
+                suffixIcon: locProvider.isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                         ),
-                ),
-                validator: (v) => v!.isEmpty ? "Enter address" : null,
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.my_location_rounded, color: AppColors.primary),
+                        tooltip: "Auto-detect live GPS location",
+                        onPressed: () async {
+                          await locProvider.fetchLocation();
+                          if (mounted && locProvider.location != null) {
+                            setState(() {
+                              _addressController.text = locProvider.location!.fullAddress;
+                            });
+                          }
+                        },
+                      ),
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Please enter an address" : null,
               ),
-              const SizedBox(height: 24),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // Required Before Time Picker
               _buildTimePicker(),
-              const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: context.watch<EmergencyViewModel>().isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size(double.infinity, 56)),
-                child: context.watch<EmergencyViewModel>().isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("BROADCAST EMERGENCY"),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Submit Button
+              PrimaryButton(
+                text: "BROADCAST EMERGENCY ALERT",
+                icon: Icons.campaign_rounded,
+                isLoading: emergencyVM.isLoading || _isSubmitting,
+                onPressed: (emergencyVM.isLoading || _isSubmitting) ? null : _submit,
               ),
+
+              const SizedBox(height: AppSpacing.xxl),
             ],
           ),
         ),
@@ -200,26 +337,49 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   Widget _buildTimePicker() {
     return InkWell(
       onTap: () async {
-        final picked = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_requiredBefore));
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay.fromDateTime(_requiredBefore),
+        );
         if (picked != null) {
           final now = DateTime.now();
-          setState(() => _requiredBefore = DateTime(now.year, now.month, now.day, picked.hour, picked.minute));
+          setState(() {
+            _requiredBefore = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
+          });
         }
       },
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.border),
+        ),
         child: Row(
           children: [
-            const Icon(Icons.timer, color: Colors.red),
-            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: const Icon(Icons.timer_outlined, color: AppColors.error, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.md),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Required Before", style: TextStyle(fontSize: 12, color: Colors.red)),
-                Text(DateFormat('hh:mm a').format(_requiredBefore), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("Meals Required Before", style: AppTypography.caption),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('hh:mm a (Today)').format(_requiredBefore),
+                  style: AppTypography.subsectionHeading,
+                ),
               ],
             ),
+            const Spacer(),
+            const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
           ],
         ),
       ),

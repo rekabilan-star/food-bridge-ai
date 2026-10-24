@@ -16,6 +16,8 @@ class ModernTextField extends StatefulWidget {
   final TextInputType keyboardType;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
   final VoidCallback? onTap;
   final bool readOnly;
   final Widget? suffixIcon;
@@ -31,6 +33,8 @@ class ModernTextField extends StatefulWidget {
     this.keyboardType = TextInputType.text,
     this.validator,
     this.onChanged,
+    this.onSubmitted,
+    this.textInputAction,
     this.onTap,
     this.readOnly = false,
     this.suffixIcon,
@@ -62,6 +66,8 @@ class _ModernTextFieldState extends State<ModernTextField> {
         controller: widget.controller,
         obscureText: _obscureText,
         keyboardType: widget.keyboardType,
+        textInputAction: widget.textInputAction,
+        onFieldSubmitted: widget.onSubmitted,
         validator: widget.validator,
         onChanged: widget.onChanged,
         onTap: widget.onTap,

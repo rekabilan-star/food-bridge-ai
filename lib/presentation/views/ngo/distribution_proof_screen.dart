@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/modern_text_field.dart';
+import '../common/widgets/primary_button.dart';
 
 class DistributionProofScreen extends StatefulWidget {
   const DistributionProofScreen({super.key});
@@ -16,8 +22,15 @@ class _DistributionProofScreenState extends State<DistributionProofScreen> {
   final _notesController = TextEditingController();
   File? _deliveryImage;
 
+  @override
+  void dispose() {
+    _servedController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+    final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
     if (picked != null) setState(() => _deliveryImage = File(picked.path));
   }
 
@@ -26,53 +39,74 @@ class _DistributionProofScreenState extends State<DistributionProofScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Thank You!"),
-          content: const Text("You have successfully rescued and distributed food. This impact has been recorded."),
+          backgroundColor: AppColors.surfaceLight,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+          title: Text("Thank You!", style: AppTypography.sectionHeading),
+          content: Text(
+            "You have successfully rescued and distributed food. This impact has been recorded.",
+            style: AppTypography.bodyMedium,
+          ),
           actions: [
-            ElevatedButton(onPressed: () => Navigator.popUntil(context, (route) => route.isFirst), child: const Text("BACK TO DASHBOARD")),
+            PrimaryButton(
+              text: "BACK TO DASHBOARD",
+              onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+            ),
           ],
         ),
       );
     } else if (_deliveryImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please upload delivery photo")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please upload delivery photo"),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Distribution Proof")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(title: "Proof of Distribution"),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Step 7: Proof of Distribution", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text("Rescuing food is only half the work. Let's record the impact.", style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 32),
+              Text("Step 7: Proof of Distribution", style: AppTypography.sectionHeading),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                "Rescuing food is only half the work. Let's record the impact for transparency.",
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.lg),
               _buildImageUploader(),
-              const SizedBox(height: 24),
-              TextFormField(
+              const SizedBox(height: AppSpacing.lg),
+              ModernTextField(
                 controller: _servedController,
-                decoration: const InputDecoration(labelText: "Approx. Members Served", prefixIcon: Icon(Icons.people_outline)),
+                label: "Approx. Members Served",
+                hint: "e.g., 40",
+                prefixIcon: Icons.people_outline_rounded,
                 keyboardType: TextInputType.number,
-                validator: (v) => v!.isEmpty ? "Required" : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: AppSpacing.md),
+              ModernTextField(
                 controller: _notesController,
-                decoration: const InputDecoration(labelText: "Delivery Notes", prefixIcon: Icon(Icons.notes), hintText: "Where did you distribute?"),
+                label: "Distribution Notes",
+                hint: "Where and to whom was food delivered?",
+                prefixIcon: Icons.notes_rounded,
                 maxLines: 3,
-                validator: (v) => v!.isEmpty ? "Required" : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
               ),
-              const SizedBox(height: 40),
-              ElevatedButton(
+              const SizedBox(height: AppSpacing.xl),
+              PrimaryButton(
+                text: "COMPLETE DISTRIBUTION",
+                icon: Icons.check_circle_rounded,
                 onPressed: _completeDistribution,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                child: const Text("COMPLETE DISTRIBUTION"),
               ),
             ],
           ),
@@ -87,10 +121,40 @@ class _DistributionProofScreenState extends State<DistributionProofScreen> {
       child: Container(
         height: 200,
         width: double.infinity,
-        decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey[300]!)),
-        child: _deliveryImage == null 
-          ? Column(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.camera_alt, size: 48, color: Colors.grey), SizedBox(height: 12), Text("Add Delivery Photo", style: TextStyle(color: Colors.grey))])
-          : ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(_deliveryImage!, fit: BoxFit.cover)),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: _deliveryImage == null ? AppColors.border : AppColors.primary,
+            width: 1.5,
+          ),
+        ),
+        child: _deliveryImage == null
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, size: 40, color: AppColors.primary),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    "Add Distribution Photo",
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              )
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                child: Image.file(_deliveryImage!, fit: BoxFit.cover),
+              ),
       ),
     );
   }

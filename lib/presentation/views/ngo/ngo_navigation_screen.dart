@@ -3,6 +3,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/secondary_button.dart';
 import 'qr_scanner_screen.dart';
 
 class NgoNavigationScreen extends StatefulWidget {
@@ -38,11 +45,12 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
     final url =
         'https://www.google.com/maps/dir/?api=1&destination=${_destination.latitude},${_destination.longitude}';
     if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Could not launch Maps")));
+          const SnackBar(content: Text("Could not launch external maps")),
+        );
       }
     }
   }
@@ -50,7 +58,8 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Navigating to Donor")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(title: "Navigating to Pickup"),
       body: Stack(
         children: [
           FlutterMap(
@@ -68,10 +77,22 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
                 markers: [
                   Marker(
                     point: _destination,
-                    width: 40,
-                    height: 40,
-                    child: const Icon(Icons.location_on,
-                        color: Colors.red, size: 40),
+                    width: 48,
+                    height: 48,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 28),
+                    ),
                   ),
                 ],
               ),
@@ -84,57 +105,73 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
   }
 
   Widget _buildInfoPanel() {
-    return Align(
-      alignment: Alignment.bottomCenter,
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: Container(
-        margin: const EdgeInsets.all(20),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)
-          ],
+          color: AppColors.surfaceLight,
+          borderRadius: AppRadius.sheetTop,
+          boxShadow: AppShadows.elevated,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+              ),
+            ),
             Row(
               children: [
-                const CircleAvatar(
-                    radius: 20,
-                    backgroundColor: AppColors.ngoColor,
-                    child: Icon(Icons.timer, color: Colors.white, size: 18)),
-                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.timer_outlined, color: AppColors.primary, size: 24),
+                ),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text("12 mins to reach",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text("1.8 KM • Light traffic",
-                            style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      ]),
-                ),
-                IconButton(
-                  onPressed: _launchMaps,
-                  icon: const Icon(Icons.directions, color: AppColors.ngoColor),
-                  tooltip: "Open in Native Maps",
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Navigating to Food Pickup", style: AppTypography.subsectionHeading),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Destination verified within 20 KM service radius",
+                        style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const Divider(height: 32),
-            ElevatedButton.icon(
+            const SizedBox(height: AppSpacing.md),
+            SecondaryButton(
+              text: "OPEN IN GOOGLE MAPS",
+              icon: Icons.directions_outlined,
+              onPressed: _launchMaps,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            PrimaryButton(
+              text: "ARRIVED AT DONOR LOCATION",
+              icon: Icons.check_circle_rounded,
               onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          QrScannerScreen(donationId: widget.donationId))),
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text("ARRIVED AT DONOR"),
-              style:
-                  ElevatedButton.styleFrom(backgroundColor: AppColors.ngoColor),
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QrScannerScreen(donationId: widget.donationId),
+                ),
+              ),
             ),
           ],
         ),
