@@ -90,6 +90,14 @@ class AppTypography {
     height: 1.3,
   );
 
+  /// 12pt, bold - Emphasized metadata, tags, and small labels
+  static TextStyle captionBold = GoogleFonts.poppins(
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    color: AppColors.textPrimary,
+    height: 1.3,
+  );
+
   /// 11pt, bold - Micro badges and status pills
   static TextStyle badge = GoogleFonts.poppins(
     fontSize: 11,

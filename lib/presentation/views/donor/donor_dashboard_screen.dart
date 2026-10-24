@@ -8,6 +8,10 @@ import '../../viewmodels/emergency_viewmodel.dart';
 import '../../viewmodels/notification_viewmodel.dart';
 import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/ui_utils.dart';
 import 'donate_food_screen.dart';
 import 'qr_display_screen.dart';
@@ -21,6 +25,10 @@ import '../common/widgets/donor_badges_card.dart';
 import '../common/widgets/user_profile_modal.dart';
 import '../common/widgets/floating_bottom_nav.dart';
 import '../common/widgets/shimmer_loading.dart';
+import '../common/widgets/empty_state.dart';
+import '../common/widgets/section_heading.dart';
+import '../common/widgets/primary_button.dart';
+import '../common/widgets/secondary_button.dart';
 import '../chat/chat_list_screen.dart';
 
 import 'dart:async';
@@ -87,14 +95,14 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
 
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                          padding: AppSpacing.pagePadding,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // 2. Primary Action Hero Banner (+ Donate Food)
                               _buildPrimaryDonateHero(context).animate().fadeIn(duration: 400.ms),
 
-                              const SizedBox(height: 20),
+                              AppSpacing.vGapLg,
 
                               // 3. Core Impact Statistics Row (3 StatCards, overflow-free)
                               Row(
@@ -107,7 +115,7 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                                       iconColor: AppColors.primary,
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
+                                  AppSpacing.hGapSm,
                                   Expanded(
                                     child: StatCard(
                                       value: "${donationViewModel.donations.fold<int>(0, (sum, d) => sum + d.membersServed)}",
@@ -116,64 +124,44 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                                       iconColor: AppColors.secondary,
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
+                                  AppSpacing.hGapSm,
                                   Expanded(
                                     child: StatCard(
-                                      value: user?.averageRating != null && user!.averageRating > 0 
-                                          ? user.averageRating.toStringAsFixed(1) 
+                                      value: user?.averageRating != null && user!.averageRating > 0
+                                          ? user.averageRating.toStringAsFixed(1)
                                           : "${donationViewModel.donations.where((d) => d.status == 'completed').length * 10}",
                                       label: "Impact Score",
                                       icon: Icons.star_rounded,
-                                      iconColor: Colors.amber.shade700,
+                                      iconColor: AppColors.warning,
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 20),
+                              AppSpacing.vGapLg,
 
                               // 4. Donor Achievement Badges
                               const DonorBadgesCard(totalMeals: 85).animate().fadeIn(delay: 200.ms),
 
-                              const SizedBox(height: 24),
+                              AppSpacing.vGapXl,
 
-                              // 4. Urgent Emergency Rescue Requests (if active)
+                              // 5. Urgent Emergency Rescue Requests (if active)
                               if (emergencyViewModel.requests.isNotEmpty) ...[
                                 _buildEmergencySection(emergencyViewModel),
-                                const SizedBox(height: 24),
+                                AppSpacing.vGapXl,
                               ],
 
-                              // 5. Recent Active Donations Feed
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    "Active Donations",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.textPrimary,
-                                      letterSpacing: -0.3,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => const DonationHistoryScreen()),
-                                      );
-                                    },
-                                    child: const Text(
-                                      "View All",
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              // 6. Recent Active Donations Feed
+                              SectionHeading(
+                                title: "Active Donations",
+                                actionText: "View All",
+                                onActionTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const DonationHistoryScreen()),
+                                  );
+                                },
                               ),
-                              const SizedBox(height: 14),
+                              AppSpacing.vGapSm,
 
                               // Donations List with progress steppers
                               donationViewModel.isLoading && donationViewModel.donations.isEmpty
@@ -235,15 +223,13 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
       floating: true,
       pinned: true,
       elevation: 0,
-      surfaceTintColor: Colors.white,
-      backgroundColor: Colors.white,
-      title: const Text(
+      surfaceTintColor: AppColors.surfaceLight,
+      backgroundColor: AppColors.surfaceLight,
+      title: Text(
         "FoodBridge AI",
-        style: TextStyle(
-          fontWeight: FontWeight.w900,
-          fontSize: 20,
-          letterSpacing: -0.5,
+        style: AppTypography.pageTitle.copyWith(
           color: AppColors.primary,
+          fontSize: 20,
         ),
       ),
       actions: [
@@ -271,7 +257,7 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationScannerScreen())),
           tooltip: "Verify Certificate",
         ),
-        const SizedBox(width: 4),
+        AppSpacing.hGapXs,
         IconButton(
           icon: const Icon(Icons.logout_rounded, size: 22, color: AppColors.textPrimary),
           onPressed: () {
@@ -287,32 +273,30 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
             backgroundColor: AppColors.primary,
             child: Text(
               userName.isNotEmpty ? userName[0].toUpperCase() : "D",
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: AppTypography.caption.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
           ),
         ),
-        const SizedBox(width: 14),
+        AppSpacing.hGapMd,
       ],
     );
   }
 
   Widget _buildPrimaryDonateHero(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: AppSpacing.paddingXl,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.primary, Color(0xFF7E22CE)],
+          colors: AppColors.primaryGradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.2),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: AppRadius.borderXl,
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         children: [
@@ -320,35 +304,46 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "Share Surplus Food",
-                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                  style: AppTypography.displayLarge.copyWith(
+                    color: Colors.white,
+                    fontSize: 20,
+                  ),
                 ),
-                const SizedBox(height: 4),
-                const Text(
+                AppSpacing.vGapXs,
+                Text(
                   "Instant dispatch to verified NGO rescue drivers nearby.",
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: Colors.white70,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                AppSpacing.vGapBase,
                 ElevatedButton.icon(
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const DonateFoodScreen()));
                   },
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text("DONATE FOOD NOW", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                  label: Text(
+                    "DONATE FOOD NOW",
+                    style: AppTypography.button.copyWith(
+                      fontSize: 12,
+                      color: AppColors.primary,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppColors.primary,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          const Icon(Icons.volunteer_activism_rounded, size: 60, color: Colors.white24),
+          AppSpacing.hGapMd,
+          const Icon(Icons.volunteer_activism_rounded, size: 56, color: Colors.white24),
         ],
       ),
     );
@@ -358,24 +353,22 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Icon(Icons.flash_on_rounded, color: AppColors.warning, size: 18),
-            SizedBox(width: 6),
+            const Icon(Icons.flash_on_rounded, color: AppColors.warning, size: 18),
+            AppSpacing.hGapXs,
             Text(
               "URGENT RESCUE ALERTS",
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
+              style: AppTypography.badge.copyWith(
                 color: AppColors.warning,
                 letterSpacing: 0.8,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        AppSpacing.vGapSm,
         SizedBox(
-          height: 135,
+          height: 140,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: viewModel.requests.length,
@@ -386,11 +379,12 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                 child: Container(
                   width: 270,
                   margin: const EdgeInsets.only(right: 12),
-                  padding: const EdgeInsets.all(14),
+                  padding: AppSpacing.paddingMd,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    color: AppColors.surfaceLight,
+                    borderRadius: AppRadius.borderLg,
                     border: Border.all(color: AppColors.warning.withValues(alpha: 0.4), width: 1.2),
+                    boxShadow: AppShadows.subtle,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,28 +394,32 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                           Expanded(
                             child: Text(
                               request.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                              style: AppTypography.subsectionHeading.copyWith(fontSize: 13),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          AppSpacing.hGapXs,
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: AppColors.warning.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: AppRadius.borderXs,
                             ),
                             child: Text(
                               request.priority,
-                              style: const TextStyle(color: AppColors.warning, fontSize: 9, fontWeight: FontWeight.bold),
+                              style: AppTypography.badge.copyWith(
+                                color: AppColors.warning,
+                                fontSize: 9,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      AppSpacing.vGapXs,
                       Text(
                         request.reason,
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                        style: AppTypography.bodySmall,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -434,9 +432,15 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             minimumSize: const Size(80, 32),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderSm),
                           ),
-                          child: const Text("HELP NOW", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                          child: Text(
+                            "HELP NOW",
+                            style: AppTypography.badge.copyWith(
+                              color: Colors.white,
+                              fontSize: 10,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -458,14 +462,14 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
       builder: (bottomSheetContext) {
         return Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            color: AppColors.surfaceLight,
+            borderRadius: AppRadius.sheetTop,
           ),
           padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(bottomSheetContext).padding.bottom + 24,
+            left: AppSpacing.xl,
+            right: AppSpacing.xl,
+            top: AppSpacing.base,
+            bottom: MediaQuery.of(bottomSheetContext).padding.bottom + AppSpacing.xl,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -476,43 +480,38 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: AppColors.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              AppSpacing.vGapLg,
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: AppSpacing.paddingSm,
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.flash_on_rounded, color: AppColors.warning, size: 24),
                   ),
-                  const SizedBox(width: 12),
+                  AppSpacing.hGapMd,
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           "URGENT RESCUE ALERT",
-                          style: TextStyle(
+                          style: AppTypography.badge.copyWith(
                             color: AppColors.warning,
-                            fontWeight: FontWeight.w900,
                             fontSize: 11,
                             letterSpacing: 1.0,
                           ),
                         ),
                         Text(
                           request.ngoName ?? "Emergency Relief Team",
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: AppTypography.caption,
                         ),
                       ],
                     ),
@@ -521,44 +520,34 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: AppRadius.borderSm,
                     ),
                     child: Text(
                       request.priority,
-                      style: const TextStyle(
+                      style: AppTypography.badge.copyWith(
                         color: AppColors.warning,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              AppSpacing.vGapBase,
               Text(
                 request.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.sectionHeading,
               ),
-              const SizedBox(height: 8),
+              AppSpacing.vGapSm,
               Text(
                 request.reason,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  height: 1.4,
-                ),
+                style: AppTypography.bodyMedium,
               ),
-              const SizedBox(height: 20),
+              AppSpacing.vGapLg,
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: AppSpacing.paddingMd,
                 decoration: BoxDecoration(
                   color: AppColors.backgroundLight,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: AppRadius.borderLg,
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   children: [
@@ -570,80 +559,44 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(bottomSheetContext);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DonateFoodScreen(emergencyRequest: request),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.volunteer_activism_rounded, color: Colors.white),
-                  label: const Text(
-                    "DONATE FOOD FOR THIS RESCUE",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+              AppSpacing.vGapXl,
+              PrimaryButton(
+                text: "DONATE FOOD FOR THIS RESCUE",
+                icon: Icons.volunteer_activism_rounded,
+                onPressed: () {
+                  Navigator.pop(bottomSheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DonateFoodScreen(emergencyRequest: request),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 2,
-                  ),
-                ),
+                  );
+                },
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(bottomSheetContext);
-                    UIUtils.showLoadingDialog(context);
-                    final success = await context.read<EmergencyViewModel>().fulfillRequest(request.id);
-                    if (context.mounted) {
-                      Navigator.pop(context); // pop loading dialog
-                      if (success) {
-                        UIUtils.showSuccessDialog(
-                          context,
-                          "Thank you! Your emergency pledge has been recorded. The emergency team has been notified.",
-                          onOk: () => _refreshData(),
-                        );
-                      } else {
-                        UIUtils.showErrorDialog(
-                          context,
-                          context.read<EmergencyViewModel>().errorMessage ?? "Failed to register response. Please try again.",
-                        );
-                      }
+              AppSpacing.vGapSm,
+              SecondaryButton(
+                text: "PLEDGE IMMEDIATE SUPPORT",
+                icon: Icons.check_circle_outline_rounded,
+                onPressed: () async {
+                  Navigator.pop(bottomSheetContext);
+                  UIUtils.showLoadingDialog(context);
+                  final success = await context.read<EmergencyViewModel>().fulfillRequest(request.id);
+                  if (context.mounted) {
+                    Navigator.pop(context); // pop loading dialog
+                    if (success) {
+                      UIUtils.showSuccessDialog(
+                        context,
+                        "Thank you! Your emergency pledge has been recorded. The emergency team has been notified.",
+                        onOk: () => _refreshData(),
+                      );
+                    } else {
+                      UIUtils.showErrorDialog(
+                        context,
+                        context.read<EmergencyViewModel>().errorMessage ?? "Failed to register response. Please try again.",
+                      );
                     }
-                  },
-                  icon: const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary),
-                  label: const Text(
-                    "PLEDGE IMMEDIATE SUPPORT",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.primary, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
+                  }
+                },
               ),
             ],
           ),
@@ -656,14 +609,10 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     return Row(
       children: [
         Icon(icon, size: 18, color: AppColors.primary),
-        const SizedBox(width: 10),
+        AppSpacing.hGapSm,
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
+          style: AppTypography.caption,
         ),
         const Spacer(),
         Expanded(
@@ -671,9 +620,8 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+            style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
             maxLines: 2,
@@ -696,7 +644,7 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
       itemBuilder: (context, index) {
         final donation = donations[index];
         final status = StatusUtils.formatStatusLabel(donation.status);
-        
+
         final double donorLat = donation.latitude != 0 ? donation.latitude : userLat;
         final double donorLng = donation.longitude != 0 ? donation.longitude : userLng;
         final double targetLat = donation.ngoLat ?? 0;
@@ -745,11 +693,11 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
+      builder: (bottomSheetContext) => Container(
+        padding: AppSpacing.paddingXl,
         decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          color: AppColors.surfaceLight,
+          borderRadius: AppRadius.sheetTop,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -757,36 +705,36 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
             Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(10)),
             ),
-            const SizedBox(height: 18),
-            const Text(
-              "Donation Details",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            AppSpacing.vGapBase,
+            Text(
+              "Donation Options",
+              style: AppTypography.sectionHeading,
             ),
-            const SizedBox(height: 18),
+            AppSpacing.vGapBase,
             if (donation.status == 'waiting') ...[
               _buildModalTile(context, "Edit Details", Icons.edit_outlined, AppColors.primary, () {
-                Navigator.pop(context);
+                Navigator.pop(bottomSheetContext);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => DonateFoodScreen(donation: donation)));
               }),
-              const SizedBox(height: 10),
+              AppSpacing.vGapSm,
               _buildModalTile(context, "Cancel Listing", Icons.delete_outline_rounded, AppColors.error, () {
-                Navigator.pop(context);
+                Navigator.pop(bottomSheetContext);
                 _showDeleteConfirmDialog(context, donation);
               }),
             ],
             if (donation.status != 'waiting')
               _buildModalTile(context, "Track Live Map", Icons.map_outlined, AppColors.primary, () {
-                Navigator.pop(context);
+                Navigator.pop(bottomSheetContext);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => DonationTrackingScreen(donationId: donation.id)));
               }),
-            const SizedBox(height: 10),
+            AppSpacing.vGapSm,
             _buildModalTile(context, "Handover QR Code", Icons.qr_code_2_rounded, AppColors.warning, () {
-              Navigator.pop(context);
+              Navigator.pop(bottomSheetContext);
               Navigator.push(context, MaterialPageRoute(builder: (_) => QrDisplayScreen(donation: donation)));
             }),
-            const SizedBox(height: 18),
+            AppSpacing.vGapBase,
           ],
         ),
       ),
@@ -797,21 +745,24 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
     return Container(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.borderMd,
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderMd,
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppSpacing.base),
             child: Row(
               children: [
                 Icon(icon, color: color, size: 20),
-                const SizedBox(width: 12),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                AppSpacing.hGapMd,
+                Text(
+                  title,
+                  style: AppTypography.subsectionHeading.copyWith(fontSize: 14),
+                ),
                 const Spacer(),
                 Icon(Icons.arrow_forward_ios_rounded, size: 14, color: color.withValues(alpha: 0.5)),
               ],
@@ -825,25 +776,40 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
   void _showDeleteConfirmDialog(BuildContext context, dynamic donation) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Cancel Donation?"),
-        content: const Text("This action will remove your donation listing."),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceLight,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderLg),
+        title: Text("Cancel Donation?", style: AppTypography.sectionHeading),
+        content: Text(
+          "This action will remove your donation listing.",
+          style: AppTypography.bodyMedium,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("KEEP")),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              "KEEP",
+              style: AppTypography.button.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
           ElevatedButton(
             onPressed: () async {
+              Navigator.pop(dialogContext);
               final success = await context.read<DonationViewModel>().deleteDonation(donation.id);
-              if (success) {
-                if (context.mounted) Navigator.pop(context);
+              if (success && context.mounted) {
+                _refreshData();
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderSm),
               minimumSize: const Size(90, 40),
             ),
-            child: const Text("CANCEL LISTING"),
+            child: Text(
+              "CANCEL LISTING",
+              style: AppTypography.button.copyWith(color: Colors.white, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -852,27 +818,19 @@ class _DonorDashboardScreenState extends State<DonorDashboardScreen> {
 
   Widget _buildEmptyState() {
     return Container(
-      padding: const EdgeInsets.all(28),
+      padding: AppSpacing.paddingXl,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border, width: 1.2),
+        color: AppColors.surfaceLight,
+        borderRadius: AppRadius.borderLg,
+        border: Border.all(color: AppColors.border, width: 1.0),
+        boxShadow: AppShadows.subtle,
       ),
-      child: Column(
-        children: [
-          Icon(Icons.volunteer_activism_rounded, size: 44, color: AppColors.primary.withValues(alpha: 0.5)),
-          const SizedBox(height: 10),
-          const Text(
-            "No Active Donations",
-            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            "Tap 'DONATE FOOD NOW' above to share food",
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
-        ],
+      child: EmptyState(
+        icon: Icons.volunteer_activism_rounded,
+        title: "No Active Donations",
+        message: "Tap 'DONATE FOOD NOW' above to share surplus food with nearby NGO partners.",
+        padding: EdgeInsets.zero,
       ),
     );
   }

@@ -3,11 +3,16 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../viewmodels/donation_viewmodel.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
 import 'donation_tracking_screen.dart';
 import 'widgets/custom_app_bar.dart';
 import 'widgets/donation_card.dart';
 import 'widgets/modern_text_field.dart';
 import 'widgets/shimmer_loading.dart';
+import 'widgets/empty_state.dart';
 import '../../../core/utils/ui_utils.dart';
 
 class DonationHistoryScreen extends StatefulWidget {
@@ -58,22 +63,25 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
           children: [
             // Search & Filter Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
               child: Column(
                 children: [
                   ModernTextField(
-                    label: "",
-                    hint: "Search history...",
+                    label: "Search",
+                    hint: "Search history by food name or address...",
                     prefixIcon: Icons.search_rounded,
                     onChanged: (v) => setState(() => _searchQuery = v),
                   ),
-                  const SizedBox(height: 14),
+                  AppSpacing.vGapMd,
                   Row(
                     children: [
                       _buildFilterChip("All"),
-                      const SizedBox(width: 8),
+                      AppSpacing.hGapSm,
                       _buildFilterChip("Active"),
-                      const SizedBox(width: 8),
+                      AppSpacing.hGapSm,
                       _buildFilterChip("Completed"),
                     ],
                   ),
@@ -85,13 +93,16 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
             Expanded(
               child: dVM.isLoading && donations.isEmpty
                   ? const Padding(
-                      padding: EdgeInsets.all(20.0),
+                      padding: AppSpacing.pagePadding,
                       child: ShimmerListLoading(count: 4),
                     )
                   : filteredDonations.isEmpty
                       ? _buildEmptyState()
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.sm,
+                          ),
                           itemCount: filteredDonations.length,
                           itemBuilder: (context, index) {
                             final donation = filteredDonations[index];
@@ -121,7 +132,7 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
                                   ),
                                 );
                               },
-                            ).animate().fadeIn(delay: (index * 80).ms).slideY(begin: 0.1, end: 0);
+                            ).animate().fadeIn(delay: (index * 60).ms).slideY(begin: 0.08, end: 0);
                           },
                         ),
             ),
@@ -136,27 +147,20 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
     return GestureDetector(
       onTap: () => setState(() => _selectedFilter = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? AppColors.primary : AppColors.surfaceLight,
+          borderRadius: AppRadius.borderMd,
           border: Border.all(
             color: isSelected ? AppColors.primary : AppColors.border,
-            width: 1.5,
+            width: 1.0,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.04),
-              blurRadius: 8,
-            ),
-          ],
+          boxShadow: AppShadows.subtle,
         ),
         child: Text(
           label,
-          style: TextStyle(
+          style: AppTypography.captionBold.copyWith(
             color: isSelected ? Colors.white : AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),
@@ -164,29 +168,11 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.3),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.history_toggle_off_rounded, size: 54, color: AppColors.primary),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            "No Donations Found",
-            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 16),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            "Your donation activity will appear here.",
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-        ],
+    return const Center(
+      child: EmptyState(
+        icon: Icons.history_toggle_off_rounded,
+        title: "No Donations Found",
+        message: "Your donation activity and records will appear here.",
       ),
     );
   }

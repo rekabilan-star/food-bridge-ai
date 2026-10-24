@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../data/models/donation_model.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../common/widgets/custom_app_bar.dart';
+import '../common/widgets/status_badge.dart';
 
 class QrDisplayScreen extends StatelessWidget {
   final DonationModel donation;
@@ -8,51 +15,98 @@ class QrDisplayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cleanId = donation.id.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    final displayId = cleanId.length >= 6
+        ? cleanId.substring(cleanId.length - 6)
+        : cleanId;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Pickup Verification")),
+      backgroundColor: AppColors.backgroundLight,
+      appBar: const CustomAppBar(title: "Pickup Verification"),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
+        child: SingleChildScrollView(
+          padding: AppSpacing.pagePadding,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 "Show this QR to the NGO Partner",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                "This ensures the food is handed over to the correct verified partner.",
+                style: AppTypography.sectionHeading,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
               ),
-              const SizedBox(height: 48),
+              AppSpacing.vGapXs,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Text(
+                  "This ensures the food is safely handed over to the verified rescue team.",
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption,
+                ),
+              ),
+              AppSpacing.vGapXl,
+
+              // QR Box
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: AppSpacing.paddingXl,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)],
+                  color: AppColors.surfaceLight,
+                  borderRadius: AppRadius.borderXl,
+                  border: Border.all(color: AppColors.border, width: 1.0),
+                  boxShadow: AppShadows.card,
                 ),
-                child: QrImageView(
-                  data: donation.qrCode ?? "No-QR",
-                  version: QrVersions.auto,
-                  size: 250.0,
+                child: Column(
+                  children: [
+                    QrImageView(
+                      data: donation.qrCode ?? "No-QR",
+                      version: QrVersions.auto,
+                      size: 220.0,
+                    ),
+                    AppSpacing.vGapMd,
+                    Text(
+                      donation.foodName,
+                      style: AppTypography.subsectionHeading,
+                      textAlign: TextAlign.center,
+                    ),
+                    AppSpacing.vGapXs,
+                    Text(
+                      "Donation ID: #$displayId",
+                      style: AppTypography.caption,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 48),
-              Text(
-                donation.foodName,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+
+              AppSpacing.vGapXl,
+
+              // Dynamic Status Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: AppRadius.borderMd,
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.warning),
+                    ),
+                    AppSpacing.hGapMd,
+                    Flexible(
+                      child: Text(
+                        "Waiting for NGO pickup scan...",
+                        style: AppTypography.captionBold.copyWith(color: AppColors.warning),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(
-                "Donation ID: ${donation.id.length >= 8 ? donation.id.substring(donation.id.length - 8).toUpperCase() : donation.id.toUpperCase()}",
-                style: const TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 60),
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              const Text("Waiting for pickup verification...", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+
+              AppSpacing.vGapLg,
+              StatusBadge(status: donation.status),
             ],
           ),
         ),

@@ -7,6 +7,10 @@ import '../../viewmodels/donation_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../data/repositories/emergency_repository.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/ui_utils.dart';
 import 'donor_dashboard_screen.dart';
 import '../common/success_confirmation_screen.dart';
@@ -14,6 +18,7 @@ import '../common/location_picker_screen.dart';
 import '../../../core/providers/location_provider_v2.dart';
 import '../../../core/models/location_model.dart';
 import '../common/widgets/primary_button.dart';
+import '../common/widgets/secondary_button.dart';
 import '../common/widgets/modern_text_field.dart';
 import '../common/widgets/custom_app_bar.dart';
 
@@ -106,9 +111,11 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           final locProvider = Provider.of<LocationProviderV2>(context, listen: false);
-          locProvider.fetchLocation().then((_) {
-            _onLocationDetected();
-          });
+          if (locProvider.location == null) {
+            locProvider.fetchLocation().then((_) {
+              _onLocationDetected();
+            });
+          }
           locProvider.addListener(_onLocationDetected);
         }
       });
@@ -144,7 +151,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
       final pickedFile = await picker.pickImage(source: source, imageQuality: 70);
       if (pickedFile != null) {
         final file = File(pickedFile.path);
-        
+
         // 1. Verify file exists and is non-empty
         if (!file.existsSync() || file.lengthSync() == 0) {
           if (mounted) {
@@ -212,10 +219,10 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return Container(
-          padding: const EdgeInsets.all(24),
+          padding: AppSpacing.paddingXl,
           decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            color: AppColors.surfaceLight,
+            borderRadius: AppRadius.sheetTop,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -224,59 +231,55 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppColors.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text(
+              AppSpacing.vGapBase,
+              Text(
                 "Upload Food Photo",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
+                style: AppTypography.sectionHeading,
               ),
-              const SizedBox(height: 6),
-              const Text(
+              AppSpacing.vGapXs,
+              Text(
                 "Take a real-time photo of the food or choose from gallery",
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: AppTypography.caption,
               ),
-              const SizedBox(height: 20),
+              AppSpacing.vGapLg,
               ListTile(
                 leading: Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: AppSpacing.paddingSm,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
                 ),
-                title: const Text("Take Photo (Camera)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text("Capture live photo using device camera", style: TextStyle(fontSize: 12)),
+                title: Text("Take Photo (Camera)", style: AppTypography.subsectionHeading.copyWith(fontSize: 14)),
+                subtitle: Text("Capture live photo using device camera", style: AppTypography.caption),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickImage(ImageSource.camera);
                 },
               ),
-              const Divider(),
+              const Divider(color: AppColors.border),
               ListTile(
                 leading: Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: AppSpacing.paddingSm,
                   decoration: BoxDecoration(
                     color: AppColors.secondary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.photo_library_rounded, color: AppColors.secondary),
                 ),
-                title: const Text("Choose from Gallery", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text("Select existing photo from gallery", style: TextStyle(fontSize: 12)),
+                title: Text("Choose from Gallery", style: AppTypography.subsectionHeading.copyWith(fontSize: 14)),
+                subtitle: Text("Select existing photo from gallery", style: AppTypography.caption),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickImage(ImageSource.gallery);
                 },
               ),
-              const SizedBox(height: 12),
+              AppSpacing.vGapMd,
             ],
           ),
         );
@@ -304,13 +307,13 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
     if (_isSubmitting || viewModel.isLoading) return;
 
     final locProvider = context.read<LocationProviderV2>();
-    
+
     if (_formKey.currentState!.validate()) {
       if (_items.isEmpty) {
         UIUtils.showErrorDialog(context, "Please add at least one food item");
         return;
       }
-      
+
       if (locProvider.location == null) {
         UIUtils.showErrorDialog(context, "GPS Location required. Please verify your location.");
         return;
@@ -339,7 +342,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
 
         String mainFoodName = _items.map((i) => i.foodName).join(", ");
         if (mainFoodName.length > 50) mainFoodName = "${mainFoodName.substring(0, 47)}...";
-        
+
         String mainCategory = _foodCategory;
         int totalMembers = int.tryParse(_quantityController.text) ?? 2;
 
@@ -350,8 +353,8 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
           backendChecklistFoodType = 'Both';
         }
 
-        final pickupAddress = _addressController.text.trim().isNotEmpty 
-            ? _addressController.text.trim() 
+        final pickupAddress = _addressController.text.trim().isNotEmpty
+            ? _addressController.text.trim()
             : ((locProvider.location?.fullAddress != null && locProvider.location!.fullAddress.trim().isNotEmpty)
                 ? locProvider.location!.fullAddress
                 : "Address unavailable");
@@ -360,7 +363,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
           id: widget.donation?.id ?? '',
           donorId: widget.donation?.donorId ?? '',
           items: _items,
-          foodName: mainFoodName, 
+          foodName: mainFoodName,
           category: mainCategory,
           membersServed: totalMembers,
           imageUrl: widget.donation?.imageUrl ?? '',
@@ -401,7 +404,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 estimatedPickup: "Today, 6:00 PM",
                 onContinue: () {
                   Navigator.pushAndRemoveUntil(
-                    context, 
+                    context,
                     MaterialPageRoute(builder: (_) => const DonorDashboardScreen(initialIndex: 1)),
                     (route) => false,
                   );
@@ -412,8 +415,8 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
         } else {
           if (!mounted) return;
           UIUtils.showErrorDialog(
-            context, 
-            viewModel.errorMessage ?? "Operation Failed"
+            context,
+            viewModel.errorMessage ?? "Operation Failed",
           );
         }
       } finally {
@@ -437,7 +440,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
         title: widget.donation != null ? "Edit Donation" : "Donate Food",
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: AppSpacing.pagePadding,
         child: Form(
           key: _formKey,
           child: Column(
@@ -445,39 +448,34 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
             children: [
               _buildStepProgressBar(),
 
-              const SizedBox(height: 28),
+              AppSpacing.vGapXl,
 
               if (_currentStep == 1) ...[
-                const Text(
-                  "Food Type",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
+                Text("Food Type", style: AppTypography.fieldLabel),
+                AppSpacing.vGapSm,
                 _buildDropdownCard(
                   value: _foodType,
                   items: const ['Cooked Meal', 'Fresh Produce', 'Packaged Food', 'Bakery Items'],
                   onChanged: (v) => setState(() => _foodType = v!),
                 ),
 
-                const SizedBox(height: 18),
+                AppSpacing.vGapLg,
 
-                const Text(
-                  "Quantity",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
+                Text("Quantity", style: AppTypography.fieldLabel),
+                AppSpacing.vGapSm,
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       flex: 2,
                       child: ModernTextField(
                         controller: _quantityController,
-                        label: "",
+                        label: "Quantity",
                         hint: "e.g. 2",
                         keyboardType: TextInputType.number,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    AppSpacing.hGapMd,
                     Expanded(
                       flex: 1,
                       child: _buildDropdownCard(
@@ -489,20 +487,17 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 18),
+                AppSpacing.vGapLg,
 
-                const Text(
-                  "Food Category",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
+                Text("Food Category", style: AppTypography.fieldLabel),
+                AppSpacing.vGapSm,
                 _buildDropdownCard(
                   value: _foodCategory,
                   items: const ['Vegetarian', 'Non-Vegetarian', 'Vegan', 'Eggitarian'],
                   onChanged: (v) => setState(() => _foodCategory = v!),
                 ),
 
-                const SizedBox(height: 18),
+                AppSpacing.vGapLg,
 
                 _buildDateSelectorTile(
                   label: "Prepared On",
@@ -519,7 +514,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   },
                 ),
 
-                const SizedBox(height: 14),
+                AppSpacing.vGapMd,
 
                 _buildDateSelectorTile(
                   label: "Best Before",
@@ -533,8 +528,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                       lastDate: DateTime.now().add(const Duration(days: 7)),
                     );
                     if (picked != null) {
-                      if (!mounted) return;
-                      // ignore: use_build_context_synchronously
+                      if (!mounted || !context.mounted) return;
                       final timePicked = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_expiryTime));
                       if (timePicked != null && mounted) {
                         setState(() {
@@ -545,20 +539,17 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   },
                 ),
 
-                const SizedBox(height: 22),
+                AppSpacing.vGapLg,
 
-                const Text(
-                  "Add Photo",
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
+                Text("Add Photo", style: AppTypography.fieldLabel),
+                AppSpacing.vGapSm,
                 _buildPhotoUploadCard(),
                 if (_isAiAnalyzing || _aiAssessed) ...[
-                  const SizedBox(height: 14),
+                  AppSpacing.vGapMd,
                   _buildAiAssessmentBox(),
                 ],
 
-                const SizedBox(height: 36),
+                AppSpacing.vGapXxl,
 
                 PrimaryButton(
                   text: "Next: Location",
@@ -599,18 +590,12 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
               ] else if (_currentStep == 2) ...[
                 // STEP 2: Location Verification
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: AppSpacing.paddingLg,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    color: AppColors.surfaceLight,
+                    borderRadius: AppRadius.borderLg,
+                    border: Border.all(color: AppColors.border, width: 1.0),
+                    boxShadow: AppShadows.card,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,103 +603,95 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: AppSpacing.paddingSm,
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 24),
                           ),
-                          const SizedBox(width: 12),
-                          const Expanded(
+                          AppSpacing.hGapMd,
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   "Pickup Location Verification",
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                  style: AppTypography.subsectionHeading,
                                 ),
                                 Text(
                                   "GPS coordinates required for food pickup",
-                                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: AppTypography.caption,
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      AppSpacing.vGapBase,
                       if (locProvider.isLoading) ...[
-                        const Row(
+                        Row(
                           children: [
-                            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                            SizedBox(width: 12),
-                            Text("Detecting real GPS location...", style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                            AppSpacing.hGapMd,
+                            Text("Detecting real GPS location...", style: AppTypography.bodySmall),
                           ],
                         ),
                       ] else if (locProvider.location != null) ...[
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: AppSpacing.paddingMd,
                           decoration: BoxDecoration(
                             color: AppColors.success.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: AppRadius.borderMd,
                             border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
                               const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
-                              const SizedBox(width: 10),
+                              AppSpacing.hGapSm,
                               Expanded(
                                 child: Text(
                                   "GPS: ${locProvider.location!.latitude.toStringAsFixed(4)}° N, ${locProvider.location!.longitude.toStringAsFixed(4)}° E",
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+                                  style: AppTypography.captionBold.copyWith(color: AppColors.textPrimary),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        AppSpacing.vGapSm,
                         Text(
                           locProvider.location!.fullAddress.trim().isNotEmpty
                               ? locProvider.location!.fullAddress
                               : "Address unavailable (GPS coordinates verified)",
-                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          style: AppTypography.bodySmall,
                         ),
                       ] else ...[
-                        const Text(
+                        Text(
                           "GPS location not detected yet.",
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                          style: AppTypography.bodySmall,
                         ),
                       ],
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
+                      AppSpacing.vGapBase,
+                      SecondaryButton(
+                        text: "Verify / Select on Map",
+                        icon: Icons.map_rounded,
                         onPressed: _openLocationPicker,
-                        icon: const Icon(Icons.map_rounded, size: 18),
-                        label: const Text("Verify / Select on Map"),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 44),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 36),
+                AppSpacing.vGapXxl,
 
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
+                      child: SecondaryButton(
+                        text: "Back",
                         onPressed: () => setState(() => _currentStep = 1),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text("Back"),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    AppSpacing.hGapMd,
                     Expanded(
                       flex: 2,
                       child: PrimaryButton(
@@ -739,93 +716,87 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
               ] else ...[
                 // STEP 3: Review & Submit
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: AppSpacing.paddingLg,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    color: AppColors.surfaceLight,
+                    borderRadius: AppRadius.borderLg,
+                    border: Border.all(color: AppColors.border, width: 1.0),
+                    boxShadow: AppShadows.card,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         "Donation Summary",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        style: AppTypography.sectionHeading,
                       ),
-                      const SizedBox(height: 14),
+                      AppSpacing.vGapBase,
                       Row(
                         children: [
                           if (_image != null)
                             ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(_image!, width: 60, height: 60, fit: BoxFit.cover),
+                              borderRadius: AppRadius.borderMd,
+                              child: Image.file(_image!, width: 64, height: 64, fit: BoxFit.cover),
                             )
                           else
                             Container(
-                              width: 60,
-                              height: 60,
+                              width: 64,
+                              height: 64,
                               decoration: BoxDecoration(
-                                color: AppColors.accent.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(12),
+                                color: AppColors.accent,
+                                borderRadius: AppRadius.borderMd,
                               ),
-                              child: const Icon(Icons.fastfood_rounded, color: AppColors.primary),
+                              child: const Icon(Icons.fastfood_rounded, color: AppColors.primary, size: 28),
                             ),
-                          const SizedBox(width: 14),
+                          AppSpacing.hGapMd,
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   "$_foodType (${_quantityController.text} $_quantityUnit)",
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
+                                  style: AppTypography.subsectionHeading,
                                 ),
-                                const SizedBox(height: 4),
+                                AppSpacing.vGapXs,
                                 Text(
                                   "Category: $_foodCategory",
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: AppTypography.caption,
                                 ),
                                 Text(
                                   "Prepared: ${DateFormat('dd MMM, h:mm a').format(_preparedTime)}",
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: AppTypography.caption,
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const Divider(height: 24, color: AppColors.border),
-                      const Text(
+                      const Divider(height: 28, color: AppColors.border),
+                      Text(
                         "Pickup Address & Coordinates",
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        style: AppTypography.fieldLabel,
                       ),
-                      const SizedBox(height: 4),
+                      AppSpacing.vGapXs,
                       Text(
                         _addressController.text.trim().isNotEmpty
                             ? _addressController.text.trim()
                             : (locProvider.location?.fullAddress != null && locProvider.location!.fullAddress.trim().isNotEmpty
                                 ? locProvider.location!.fullAddress
                                 : "Address unavailable"),
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        style: AppTypography.bodySmall,
                       ),
                       if (locProvider.location != null) ...[
-                        const SizedBox(height: 4),
+                        AppSpacing.vGapXs,
                         Text(
                           "GPS: ${locProvider.location!.latitude.toStringAsFixed(4)}° N, ${locProvider.location!.longitude.toStringAsFixed(4)}° E",
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success),
+                          style: AppTypography.captionBold.copyWith(color: AppColors.success),
                         ),
                       ],
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 18),
+                AppSpacing.vGapLg,
 
                 ModernTextField(
                   controller: _instructionController,
@@ -835,21 +806,17 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   maxLines: 2,
                 ),
 
-                const SizedBox(height: 36),
+                AppSpacing.vGapXxl,
 
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
+                      child: SecondaryButton(
+                        text: "Back",
                         onPressed: _isSubmitting || viewModel.isLoading ? null : () => setState(() => _currentStep = 2),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text("Back"),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    AppSpacing.hGapMd,
                     Expanded(
                       flex: 2,
                       child: PrimaryButton(
@@ -862,7 +829,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 ),
               ],
 
-              const SizedBox(height: 24),
+              AppSpacing.vGapXl,
             ],
           ),
         ),
@@ -890,7 +857,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
           height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive ? AppColors.primary : Colors.white,
+            color: isActive ? AppColors.primary : AppColors.surfaceLight,
             border: Border.all(
               color: isActive ? AppColors.primary : AppColors.border,
               width: 2,
@@ -899,21 +866,19 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
           child: Center(
             child: Text(
               "$step",
-              style: TextStyle(
+              style: AppTypography.captionBold.copyWith(
                 color: isActive ? Colors.white : AppColors.textSecondary,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 4),
+        AppSpacing.vGapXs,
         Text(
           label,
-          style: TextStyle(
+          style: AppTypography.caption.copyWith(
             color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
             fontSize: 11,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ],
@@ -936,29 +901,19 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base, vertical: AppSpacing.xs),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppColors.surfaceLight,
+        borderRadius: AppRadius.borderMd,
+        border: Border.all(color: AppColors.border, width: 1.0),
+        boxShadow: AppShadows.subtle,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: items.contains(value) ? value : items.first,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
           onChanged: onChanged,
           items: items.map((item) {
             return DropdownMenuItem<String>(
@@ -980,41 +935,28 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
+        Text(label, style: AppTypography.fieldLabel),
+        AppSpacing.vGapSm,
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: AppColors.surfaceLight,
+            borderRadius: AppRadius.borderMd,
+            border: Border.all(color: AppColors.border, width: 1.0),
+            boxShadow: AppShadows.subtle,
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: AppRadius.borderMd,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: AppSpacing.paddingBase,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       dateString,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
                     ),
                     Icon(icon, color: AppColors.textSecondary, size: 20),
                   ],
@@ -1034,34 +976,28 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
         height: 140,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AppColors.accent.withValues(alpha: 0.25),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+          color: AppColors.accent,
+          borderRadius: AppRadius.borderLg,
+          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3), width: 1.2),
         ),
         child: _image == null
             ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: AppSpacing.paddingMd,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.surfaceLight,
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                        ),
-                      ],
+                      boxShadow: AppShadows.subtle,
                     ),
                     child: const Icon(Icons.camera_alt_outlined, size: 26, color: AppColors.primary),
                   ),
-                  const SizedBox(height: 10),
-                  const Text(
+                  AppSpacing.vGapSm,
+                  Text(
                     "Add food image (Camera / Gallery)",
-                    style: TextStyle(
+                    style: AppTypography.bodySmall.copyWith(
                       color: AppColors.primary,
-                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1071,7 +1007,7 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 children: [
                   Positioned.fill(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: AppRadius.borderLg,
                       child: Image.file(_image!, fit: BoxFit.cover),
                     ),
                   ),
@@ -1096,28 +1032,24 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
   Widget _buildAiAssessmentBox() {
     if (_isAiAnalyzing) {
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: AppSpacing.paddingBase,
         decoration: BoxDecoration(
           color: AppColors.primary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: AppRadius.borderMd,
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            SizedBox(
+            const SizedBox(
               width: 20,
               height: 20,
               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
             ),
-            SizedBox(width: 14),
+            AppSpacing.hGapMd,
             Expanded(
               child: Text(
                 "AI Photo Engine analyzing freshness & estimated servings...",
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
+                style: AppTypography.captionBold.copyWith(color: AppColors.primary),
               ),
             ),
           ],
@@ -1126,11 +1058,11 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: AppSpacing.paddingBase,
       decoration: BoxDecoration(
         color: AppColors.success.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.3), width: 1.5),
+        borderRadius: AppRadius.borderMd,
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.25), width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1145,34 +1077,31 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                 ),
                 child: const Icon(Icons.auto_awesome_rounded, color: AppColors.success, size: 18),
               ),
-              const SizedBox(width: 10),
-              const Expanded(
+              AppSpacing.hGapSm,
+              Expanded(
                 child: Text(
                   "AI Photo Assessment Verified",
-                  style: TextStyle(
+                  style: AppTypography.subsectionHeading.copyWith(
                     fontSize: 13,
-                    fontWeight: FontWeight.w800,
                     color: AppColors.success,
                   ),
                 ),
               ),
               Text(
                 "Score: $_aiFreshnessScore%",
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
+                style: AppTypography.captionBold.copyWith(
                   color: AppColors.success,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          AppSpacing.vGapSm,
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 "Est. Servings: ~$_aiEstimatedServings plates",
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                style: AppTypography.captionBold.copyWith(color: AppColors.textPrimary),
               ),
               InkWell(
                 onTap: () {
@@ -1190,14 +1119,13 @@ class _DonateFoodScreenState extends State<DonateFoodScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: AppRadius.borderSm,
                   ),
-                  child: const Text(
+                  child: Text(
                     "AUTO-FILL",
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                    style: AppTypography.badge.copyWith(
                       color: Colors.white,
+                      fontSize: 10,
                     ),
                   ),
                 ),

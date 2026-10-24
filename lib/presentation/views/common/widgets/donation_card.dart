@@ -1,8 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radius.dart';
+import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
+import 'status_badge.dart';
 
+/// Design System Donation Card for FoodBridge AI.
+/// Renders food donation status, thumbnail, stepper and live actions.
 class DonationCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -45,12 +52,28 @@ class DonationCard extends StatelessWidget {
     return '$rootServer$cleanPath';
   }
 
+  String _formatCardStatus(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower == 'waiting' || lower == 'available' || lower == 'pending') return 'Pending';
+    if (lower == 'accepted' || lower == 'matched' || lower == 'assigned') return 'Accepted';
+    if (lower.contains('picked') || lower.contains('transit') || lower.contains('route') || lower.contains('arrived')) return 'In Transit';
+    if (lower.contains('complete') || lower.contains('claimed') || lower.contains('delivered')) return 'Completed';
+    if (lower.contains('cancel') || lower.contains('reject')) return 'Cancelled';
+    if (lower.contains('expired')) return 'Expired';
+    return raw.toUpperCase();
+  }
+
   int _getStatusStepIndex() {
     final lower = status.toLowerCase();
     if (lower == 'completed' || lower == 'claimed' || lower == 'delivered') {
       return 3;
     }
-    if (lower == 'picked_up' || lower == 'picked up' || lower == 'on_the_way' || lower == 'arrived' || lower == 'in_transit' || lower == 'en_route') {
+    if (lower == 'picked_up' ||
+        lower == 'picked up' ||
+        lower == 'on_the_way' ||
+        lower == 'arrived' ||
+        lower == 'in_transit' ||
+        lower == 'en_route') {
       return 2;
     }
     if (lower == 'accepted' || lower == 'matched' || lower == 'assigned') {
@@ -61,106 +84,63 @@ class DonationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color statusBgColor;
-    Color statusTextColor;
-
-    final lowerStatus = status.toLowerCase();
-    if (lowerStatus.contains('completed') || lowerStatus.contains('claimed') || lowerStatus.contains('delivered')) {
-      statusBgColor = const Color(0xFFE8F5E9);
-      statusTextColor = const Color(0xFF2E7D32);
-    } else if (lowerStatus.contains('picked') || lowerStatus.contains('progress') || lowerStatus.contains('route')) {
-      statusBgColor = const Color(0xFFF3E5F5);
-      statusTextColor = AppColors.primary;
-    } else if (lowerStatus.contains('accepted') || lowerStatus.contains('matched') || lowerStatus.contains('assigned')) {
-      statusBgColor = const Color(0xFFE3F2FD);
-      statusTextColor = Colors.blue.shade800;
-    } else {
-      statusBgColor = const Color(0xFFFFF3E0);
-      statusTextColor = Colors.orange.shade900;
-    }
-
     final stepIndex = _getStatusStepIndex();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        color: AppColors.surfaceLight,
+        borderRadius: AppRadius.borderLg,
+        border: Border.all(color: AppColors.border, width: 1.0),
+        boxShadow: AppShadows.card,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppRadius.borderLg,
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Row
+                // Top Row: Thumbnail + Info + Status
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildLeadingThumbnail(),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             title,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.subsectionHeading,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
+                            style: AppTypography.caption,
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(width: AppSpacing.xs),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusBgColor,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            status.toUpperCase(),
-                            style: TextStyle(
-                              color: statusTextColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
+                        StatusBadge(status: status, label: _formatCardStatus(status)),
                         const SizedBox(height: 4),
                         Text(
                           timeAgo,
-                          style: TextStyle(
-                            color: AppColors.textSecondary.withValues(alpha: 0.7),
-                            fontSize: 11,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 10,
                           ),
                         ),
                       ],
@@ -168,64 +148,79 @@ class DonationCard extends StatelessWidget {
                   ],
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
 
-                // Real-Time Progress Stepper (Swiggy / Flipkart Style)
+                // Real-Time Stepper
                 _buildProgressStepper(stepIndex),
 
-                if (etaText != null || distanceText != null) ...[
-                  const SizedBox(height: 12),
+                if (etaText != null || distanceText != null || onTrackTap != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      if (etaText != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.timer_outlined, size: 12, color: AppColors.primary),
-                              const SizedBox(width: 4),
-                              Text(
-                                "ETA: $etaText",
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
+                      Expanded(
+                        child: Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (etaText != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent,
+                                  borderRadius: AppRadius.borderSm,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.timer_outlined, size: 12, color: AppColors.primary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "ETA: $etaText",
+                                      style: AppTypography.badge.copyWith(
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      if (etaText != null && distanceText != null)
-                        const SizedBox(width: 8),
-                      if (distanceText != null)
-                        Row(
-                          children: [
-                            Icon(Icons.near_me_rounded, size: 12, color: Colors.grey.shade600),
-                            const SizedBox(width: 2),
-                            Text(
-                              distanceText!,
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                            ),
+                            if (distanceText != null)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.near_me_rounded, size: 12, color: AppColors.textSecondary),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    distanceText!,
+                                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
-                      const Spacer(),
+                      ),
                       if (onTrackTap != null)
                         InkWell(
                           onTap: onTrackTap,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          borderRadius: AppRadius.borderSm,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   "Track Live",
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                                Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.primary),
+                                const SizedBox(width: 2),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 16,
+                                  color: AppColors.primary,
+                                ),
                               ],
                             ),
                           ),
@@ -240,17 +235,18 @@ class DonationCard extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildLeadingThumbnail() {
     final resolved = _resolveImageUrl(imageUrl);
     final isLocal = imageUrl != null && imageUrl!.isNotEmpty && File(imageUrl!).existsSync();
 
     if (resolved.isNotEmpty || isLocal) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: AppRadius.borderMd,
         child: Container(
           width: 48,
           height: 48,
-          color: Colors.grey[200],
+          color: AppColors.surfaceLight,
           child: isLocal
               ? Image.file(File(imageUrl!), fit: BoxFit.cover)
               : Image.network(
@@ -258,7 +254,7 @@ class DonationCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: AppColors.accent.withValues(alpha: 0.25),
+                      color: AppColors.accent,
                       child: Icon(icon, color: AppColors.primary, size: 22),
                     );
                   },
@@ -271,8 +267,8 @@ class DonationCard extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.accent,
+        borderRadius: AppRadius.borderMd,
       ),
       child: Icon(icon, color: AppColors.primary, size: 22),
     );
@@ -300,8 +296,10 @@ class DonationCard extends StatelessWidget {
                           height: 14,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isPassed ? AppColors.primary : Colors.grey.shade300,
-                            border: isCurrent ? Border.all(color: AppColors.accent, width: 3) : null,
+                            color: isPassed ? AppColors.primary : AppColors.border,
+                            border: isCurrent
+                                ? Border.all(color: AppColors.secondary, width: 3)
+                                : null,
                           ),
                           child: isPassed
                               ? const Icon(Icons.check, size: 8, color: Colors.white)
@@ -311,7 +309,7 @@ class DonationCard extends StatelessWidget {
                           Expanded(
                             child: Container(
                               height: 2.5,
-                              color: index < currentStep ? AppColors.primary : Colors.grey.shade200,
+                              color: index < currentStep ? AppColors.primary : AppColors.border,
                             ),
                           ),
                       ],
@@ -321,10 +319,10 @@ class DonationCard extends StatelessWidget {
                       steps[index],
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: AppTypography.caption.copyWith(
                         fontSize: 9,
-                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                        color: isPassed ? AppColors.textPrimary : Colors.grey.shade400,
+                        fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                        color: isPassed ? AppColors.textPrimary : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -337,4 +335,3 @@ class DonationCard extends StatelessWidget {
     );
   }
 }
-

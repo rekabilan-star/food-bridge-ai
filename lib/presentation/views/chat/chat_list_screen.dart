@@ -19,7 +19,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final currentUserId = context.read<AuthViewModel>().user!.id;
+      final currentUserId = context.read<AuthViewModel>().user?.id ?? '';
       context.read<ChatViewModel>().fetchChats();
       context.read<ChatViewModel>().initSocketListeners(currentUserId);
     });
@@ -27,7 +27,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = context.watch<AuthViewModel>().user!.id;
+    final currentUserId = context.watch<AuthViewModel>().user?.id ?? '';
 
     return Scaffold(
       appBar: AppBar(
