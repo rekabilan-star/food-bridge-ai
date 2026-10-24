@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_radius.dart';
+import '../theme/app_typography.dart';
+import '../theme/app_icons.dart';
 
 class UIUtils {
   static void showErrorDialog(BuildContext context, String message) {
@@ -8,7 +11,7 @@ class UIUtils {
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.error_outline, color: Colors.red),
+            Icon(AppIcons.error, color: AppColors.error),
             SizedBox(width: 8),
             Text('Error'),
           ],
@@ -20,7 +23,7 @@ class UIUtils {
             child: const Text('OK'),
           ),
         ],
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderLg),
       ),
     );
   }
@@ -31,7 +34,7 @@ class UIUtils {
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.check_circle_outline, color: Colors.green),
+            Icon(AppIcons.success, color: AppColors.success),
             SizedBox(width: 8),
             Text('Success'),
           ],
@@ -46,7 +49,7 @@ class UIUtils {
             child: const Text('OK'),
           ),
         ],
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderLg),
       ),
     );
   }
@@ -56,7 +59,7 @@ class UIUtils {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const Center(
-        child: CircularProgressIndicator(),
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );
   }
@@ -64,10 +67,10 @@ class UIUtils {
   static void showSnackBar(BuildContext context, String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message, style: AppTypography.button.copyWith(fontSize: 14, color: Colors.white)),
         backgroundColor: isError ? AppColors.error : AppColors.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -78,20 +81,20 @@ class UIUtils {
     required String title,
     required String message,
     required String confirmText,
-    Color confirmColor = Colors.red,
+    Color confirmColor = AppColors.error,
     required VoidCallback onConfirm,
   }) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        content: Text(message, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderXl),
+        title: Text(title, style: AppTypography.sectionHeading),
+        content: Text(message, style: AppTypography.bodyMedium),
         actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            child: Text('CANCEL', style: AppTypography.button.copyWith(fontSize: 13, color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -101,10 +104,10 @@ class UIUtils {
             style: ElevatedButton.styleFrom(
               backgroundColor: confirmColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             ),
-            child: Text(confirmText, style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(confirmText, style: AppTypography.button.copyWith(fontSize: 13, color: Colors.white)),
           ),
         ],
       ),
@@ -142,26 +145,28 @@ class StatusUtils {
       case 'cancelled':
       case 'rejected':
         return "Cancelled";
+      case 'expired':
+        return "Expired";
       default:
         return lower.split('_').map((e) => e.isNotEmpty ? (e[0].toUpperCase() + e.substring(1)) : '').join(' ');
     }
   }
 
   static Color getStatusColor(String? status) {
-    if (status == null) return Colors.orange;
+    if (status == null) return AppColors.warning;
     final lower = status.trim().toLowerCase();
     if (lower.contains('completed') || lower.contains('delivered') || lower.contains('claimed')) {
-      return const Color(0xFF2E7D32);
+      return AppColors.success;
     }
     if (lower.contains('picked') || lower.contains('route') || lower.contains('transit') || lower.contains('arrived')) {
-      return Colors.purple.shade700;
+      return AppColors.primary;
     }
     if (lower.contains('accepted') || lower.contains('matched') || lower.contains('assigned')) {
-      return Colors.blue.shade700;
+      return AppColors.info;
     }
-    if (lower.contains('cancelled') || lower.contains('rejected')) {
-      return Colors.red.shade700;
+    if (lower.contains('cancelled') || lower.contains('rejected') || lower.contains('expired')) {
+      return AppColors.error;
     }
-    return Colors.orange.shade800;
+    return AppColors.warning;
   }
 }

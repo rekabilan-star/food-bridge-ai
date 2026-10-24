@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radius.dart';
+import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 
+/// Design System Primary Action Button for FoodBridge AI.
+/// Supports loading indicator, leading icon, custom height/background, and disabled states.
 class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -30,29 +36,14 @@ class PrimaryButton extends StatelessWidget {
       height: height,
       width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: effectiveDisabled ? Colors.grey[300] : bgColor,
-        gradient: (effectiveDisabled || backgroundColor != null)
-            ? null
-            : const LinearGradient(
-                colors: AppColors.primaryGradient,
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-        boxShadow: effectiveDisabled
-            ? []
-            : [
-                BoxShadow(
-                  color: bgColor.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        borderRadius: AppRadius.borderLg,
+        color: effectiveDisabled ? const Color(0xFFE5E0F0) : bgColor,
+        boxShadow: effectiveDisabled ? AppShadows.none : AppShadows.button,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.borderLg,
           onTap: effectiveDisabled ? null : onPressed,
           child: Center(
             child: isLoading
@@ -64,16 +55,16 @@ class PrimaryButton extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(
                           color: Colors.white,
-                          strokeWidth: 2.5,
+                          strokeWidth: 2.2,
                         ),
                       ),
-                      SizedBox(width: 10),
+                      SizedBox(width: AppSpacing.sm),
                       Text(
                         "Please wait...",
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -82,16 +73,17 @@ class PrimaryButton extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (icon != null) ...[
-                        Icon(icon, color: effectiveDisabled ? Colors.grey[600] : Colors.white, size: 20),
-                        const SizedBox(width: 8),
+                        Icon(
+                          icon,
+                          color: effectiveDisabled ? const Color(0xFF9E95AD) : Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
                       ],
                       Text(
                         text,
-                        style: TextStyle(
-                          color: effectiveDisabled ? Colors.grey[600] : Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+                        style: AppTypography.button.copyWith(
+                          color: effectiveDisabled ? const Color(0xFF9E95AD) : Colors.white,
                         ),
                       ),
                     ],

@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radius.dart';
+import '../../../../core/theme/app_shadows.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../../../core/theme/app_icons.dart';
 
+/// Design System Form Text Field for FoodBridge AI.
+/// Standardizes labels, hints, validation, password toggles, and focus styling.
 class ModernTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String label;
@@ -49,14 +55,8 @@ class _ModernTextFieldState extends State<ModernTextField> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.borderLg,
+        boxShadow: AppShadows.subtle,
       ),
       child: TextFormField(
         controller: widget.controller,
@@ -67,26 +67,24 @@ class _ModernTextFieldState extends State<ModernTextField> {
         onTap: widget.onTap,
         readOnly: widget.readOnly,
         maxLines: widget.isPassword ? 1 : widget.maxLines,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
+        style: AppTypography.bodyLarge.copyWith(fontSize: 15),
         decoration: InputDecoration(
           labelText: widget.label,
           hintText: widget.hint,
           floatingLabelBehavior: FloatingLabelBehavior.auto,
           prefixIcon: widget.prefixIcon != null
-              ? Icon(widget.prefixIcon, color: AppColors.primary, size: 22)
+              ? Icon(
+                  widget.prefixIcon,
+                  color: AppColors.primary,
+                  size: AppIcons.sizeSm,
+                )
               : null,
           suffixIcon: widget.isPassword
               ? IconButton(
                   icon: Icon(
-                    _obscureText
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+                    _obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                     color: AppColors.textSecondary,
-                    size: 20,
+                    size: AppIcons.sizeSm,
                   ),
                   onPressed: () {
                     setState(() {
