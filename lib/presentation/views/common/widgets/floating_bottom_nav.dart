@@ -16,32 +16,33 @@ class FloatingBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(20),
-      height: 72,
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      height: 68,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(34),
         border: Border.all(color: AppColors.border, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withValues(alpha: 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
-          _buildNavItem(1, Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Donations'),
+          Expanded(child: _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'Home')),
+          Expanded(child: _buildNavItem(1, Icons.shopping_bag_outlined, Icons.shopping_bag_rounded, 'Donations')),
           
           // Center Floating + Button
           GestureDetector(
             onTap: onAddTap,
             child: Container(
-              width: 52,
-              height: 52,
+              width: 48,
+              height: 48,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
@@ -52,21 +53,21 @@ class FloatingBottomNav extends StatelessWidget {
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primary.withValues(alpha: 0.4),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.add_rounded,
                 color: Colors.white,
-                size: 30,
+                size: 28,
               ),
             ),
           ),
 
-          _buildNavItem(2, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Messages'),
-          _buildNavItem(3, Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+          Expanded(child: _buildNavItem(2, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Messages')),
+          Expanded(child: _buildNavItem(3, Icons.person_outline_rounded, Icons.person_rounded, 'Profile')),
         ],
       ),
     );
@@ -83,15 +84,19 @@ class FloatingBottomNav extends StatelessWidget {
           Icon(
             isSelected ? filledIcon : outlineIcon,
             color: isSelected ? AppColors.primary : AppColors.textSecondary,
-            size: 24,
+            size: 22,
           ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              ),
             ),
           ),
         ],

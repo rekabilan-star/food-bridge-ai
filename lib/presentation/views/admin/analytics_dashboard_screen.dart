@@ -148,7 +148,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: 1.25,
+      childAspectRatio: 1.15,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
       children: [

@@ -32,7 +32,8 @@ class EmptyState extends StatelessWidget {
     final effectiveColor = iconColor ?? AppColors.primary;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
         padding: padding,
         child: Column(
           mainAxisSize: MainAxisSize.min,

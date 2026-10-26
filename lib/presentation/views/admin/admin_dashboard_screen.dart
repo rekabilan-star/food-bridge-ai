@@ -465,7 +465,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       crossAxisCount: 2,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.25,
+      childAspectRatio: 1.15,
       children: [
         StatCard(
           label: "Total Donors",
@@ -708,13 +708,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (daily.isEmpty && categories.isEmpty) {
       return Container(
-        height: 180,
+        constraints: const BoxConstraints(minHeight: 180),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: AppColors.surfaceLight,
           borderRadius: AppRadius.borderXl,
           border: Border.all(color: AppColors.border),
         ),
         child: const EmptyState(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           icon: Icons.bar_chart_rounded,
           title: "No Analytical Data",
           message: "Trend logs will render as donations and pickups occur.",

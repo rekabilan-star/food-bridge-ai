@@ -137,7 +137,7 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
       elevation: 0,
       surfaceTintColor: AppColors.surfaceLight,
       backgroundColor: AppColors.surfaceLight,
-      titleSpacing: AppSpacing.md,
+      titleSpacing: 12,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -150,9 +150,13 @@ class _NgoDashboardScreenState extends State<NgoDashboardScreen> {
             child: const Icon(Icons.shield_rounded, color: AppColors.primary, size: 20),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            "Rescue Control",
-            style: AppTypography.pageTitle.copyWith(fontSize: 18),
+          Flexible(
+            child: Text(
+              "Rescue Control",
+              style: AppTypography.pageTitle.copyWith(fontSize: 18),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
         ],
       ),
