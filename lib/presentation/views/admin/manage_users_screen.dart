@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../viewmodels/admin_viewmodel.dart';
 import '../../../data/models/user_model.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import '../../../core/utils/ui_utils.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_radius.dart';
+import '../../../core/theme/app_shadows.dart';
+
+import '../common/widgets/status_badge.dart';
+import '../common/widgets/empty_state.dart';
 
 class ManageUsersScreen extends StatefulWidget {
-  const ManageUsersScreen({super.key});
+  final String? initialRole;
+
+  const ManageUsersScreen({super.key, this.initialRole});
 
   @override
   State<ManageUsersScreen> createState() => _ManageUsersScreenState();
@@ -13,15 +24,16 @@ class ManageUsersScreen extends StatefulWidget {
 
 class _ManageUsersScreenState extends State<ManageUsersScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String? _selectedRole;
+  late String? _selectedRole;
   String? _selectedStatus;
   int _currentPage = 1;
 
   @override
   void initState() {
     super.initState();
+    _selectedRole = widget.initialRole;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AdminViewModel>().fetchUsers();
+      _loadData();
     });
   }
 
@@ -31,10 +43,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     super.dispose();
   }
 
-  void _onSearch({int page = 1}) {
+  void _loadData({int page = 1}) {
     _currentPage = page;
     context.read<AdminViewModel>().fetchUsers(
-      search: _searchController.text.trim(),
+      search: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
       role: _selectedRole,
       status: _selectedStatus,
       page: page,
@@ -44,45 +56,84 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   @override
   Widget build(BuildContext context) {
     final viewModel = context.watch<AdminViewModel>();
+    final users = viewModel.users;
+    final isLoading = viewModel.isLoading;
+    final errorMessage = viewModel.errorMessage;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        title: const Text("User Manager", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text(
+          "User & Account Management",
+          style: AppTypography.pageTitle.copyWith(fontSize: 18),
+        ),
+        backgroundColor: AppColors.surfaceLight,
+        foregroundColor: AppColors.textPrimary,
         elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: AppColors.border, height: 1.0),
+        ),
         actions: [
-            IconButton(
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () => _onSearch(page: _currentPage),
-            ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => _loadData(page: _currentPage),
+            tooltip: "Refresh List",
+          ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          _onSearch(page: _currentPage);
-        },
+        onRefresh: () async => _loadData(page: _currentPage),
+        color: AppColors.adminColor,
         child: Column(
           children: [
             _buildSearchAndFilters(),
             Expanded(
-              child: viewModel.isLoading && viewModel.users.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : viewModel.users.isEmpty
+              child: isLoading && users.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.adminColor))
+                  : errorMessage != null && users.isEmpty
                       ? SingleChildScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           child: SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.5,
-                            child: _buildEmptyState(),
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            child: EmptyState(
+                              icon: Icons.error_outline_rounded,
+                              iconColor: AppColors.error,
+                              title: "Unable to Load Accounts",
+                              message: errorMessage,
+                              actionText: "RETRY",
+                              onActionPressed: () => _loadData(page: 1),
+                            ),
                           ),
                         )
-                      : Column(
-                          children: [
-                            Expanded(child: _buildUserList(viewModel.users)),
-                            _buildPaginationControls(viewModel),
-                          ],
-                        ),
+                      : users.isEmpty
+                          ? SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: SizedBox(
+                                height: MediaQuery.of(context).size.height * 0.6,
+                                child: const EmptyState(
+                                  icon: Icons.person_search_rounded,
+                                  title: "No User Accounts Found",
+                                  message: "No user matching your current query or role filter exists.",
+                                ),
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                Expanded(
+                                  child: ListView.builder(
+                                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                                    padding: AppSpacing.pagePadding,
+                                    itemCount: users.length,
+                                    itemBuilder: (context, index) {
+                                      final user = users[index];
+                                      return _buildUserCard(user);
+                                    },
+                                  ),
+                                ),
+                                _buildPaginationControls(viewModel),
+                              ],
+                            ),
             ),
           ],
         ),
@@ -92,24 +143,44 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   Widget _buildSearchAndFilters() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      color: AppColors.surfaceLight,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         children: [
           TextField(
             controller: _searchController,
-            onSubmitted: (v) => _onSearch(),
+            onSubmitted: (_) => _loadData(page: 1),
             decoration: InputDecoration(
-              hintText: "Search name, email, or phone...",
-              prefixIcon: const Icon(Icons.search_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              hintText: "Search name, email, or contact number...",
+              hintStyle: AppTypography.fieldHint,
+              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        _loadData(page: 1);
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: AppRadius.borderLg,
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: AppRadius.borderLg,
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: AppRadius.borderLg,
+                borderSide: const BorderSide(color: AppColors.adminColor, width: 1.5),
+              ),
               filled: true,
-              fillColor: Colors.grey[100],
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear_rounded), onPressed: () { _searchController.clear(); _onSearch(); }) : null,
+              fillColor: AppColors.backgroundLight,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
-          const SizedBox(height: 12),
+          AppSpacing.vGapSm,
           Row(
             children: [
               Expanded(
@@ -119,11 +190,11 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   _selectedRole,
                   (v) {
                     setState(() => _selectedRole = v);
-                    _onSearch();
+                    _loadData(page: 1);
                   },
                 ),
               ),
-              const SizedBox(width: 12),
+              AppSpacing.hGapMd,
               Expanded(
                 child: _buildFilterDropdown(
                   "All Status",
@@ -131,7 +202,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   _selectedStatus,
                   (v) {
                     setState(() => _selectedStatus = v);
-                    _onSearch();
+                    _loadData(page: 1);
                   },
                 ),
               ),
@@ -142,21 +213,37 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  Widget _buildFilterDropdown(String hint, List<String> items, String? value, Function(String?) onChanged) {
+  Widget _buildFilterDropdown(
+    String hint,
+    List<String> items,
+    String? value,
+    Function(String?) onChanged,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.backgroundLight,
+        borderRadius: AppRadius.borderMd,
+        border: Border.all(color: AppColors.border),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(hint, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          hint: Text(hint, style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary)),
           isExpanded: true,
           items: [
-            DropdownMenuItem<String>(value: null, child: Text(hint)),
-            ...items.map((i) => DropdownMenuItem(value: i, child: Text(i.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)))),
+            DropdownMenuItem<String>(value: null, child: Text(hint, style: AppTypography.captionBold)),
+            ...items.map(
+              (i) => DropdownMenuItem(
+                value: i,
+                child: Text(
+                  i.toUpperCase(),
+                  style: AppTypography.captionBold.copyWith(
+                    color: i == value ? AppColors.adminColor : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ),
           ],
           onChanged: onChanged,
         ),
@@ -164,54 +251,89 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  Widget _buildUserList(List<UserModel> users) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: users.length,
-      itemBuilder: (context, index) {
-        final user = users[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.black.withValues(alpha: 0.03)),
+  Widget _buildUserCard(UserModel user) {
+    final roleColor = _getRoleColor(user.role);
+    final status = user.status ?? 'pending';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: AppRadius.borderXl,
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.subtle,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: CircleAvatar(
+            radius: 22,
+            backgroundColor: roleColor.withValues(alpha: 0.12),
+            child: Icon(_getRoleIcon(user.role), color: roleColor, size: 20),
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 24,
-              backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
-              child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role), size: 20),
-            ),
-            title: Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(user.email, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                const SizedBox(height: 8),
-                _buildStatusChip(user.status ?? 'pending'),
-              ],
-            ),
-            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-            onTap: () => _showUserDetailSheet(user),
+          title: Text(
+            user.name,
+            style: AppTypography.subsectionHeading.copyWith(fontSize: 15),
           ),
-        ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1, end: 0);
-      },
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text(
+                user.email,
+                style: AppTypography.caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: roleColor.withValues(alpha: 0.1),
+                      borderRadius: AppRadius.borderSm,
+                    ),
+                    child: Text(
+                      user.role.name.toUpperCase(),
+                      style: TextStyle(
+                        color: roleColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  StatusBadge(status: status),
+                ],
+              ),
+            ],
+          ),
+          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.borderActive),
+          onTap: () => _showUserDetailSheet(user),
+        ),
+      ),
     );
   }
 
   void _showUserDetailSheet(UserModel user) {
+    final roleColor = _getRoleColor(user.role);
+    final status = user.status ?? 'pending';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
+      backgroundColor: AppColors.surfaceLight,
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          left: 24, right: 24, top: 24,
+          left: 20,
+          right: 20,
+          top: 24,
           bottom: MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         child: Column(
@@ -221,69 +343,76 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  radius: 28,
-                  backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
-                  child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role), size: 28),
+                  radius: 26,
+                  backgroundColor: roleColor.withValues(alpha: 0.12),
+                  child: Icon(_getRoleIcon(user.role), color: roleColor, size: 26),
                 ),
-                const SizedBox(width: 16),
+                AppSpacing.hGapBase,
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(user.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text(user.role.name.toUpperCase(), style: TextStyle(color: _getRoleColor(user.role), fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(user.name, style: AppTypography.sectionHeading),
+                      Text(
+                        user.role.name.toUpperCase(),
+                        style: TextStyle(color: roleColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
-                _buildStatusChip(user.status ?? 'pending'),
+                StatusBadge(status: status),
               ],
             ),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 12),
-            _buildDetailRow(Icons.email_rounded, user.email),
-            _buildDetailRow(Icons.phone_rounded, user.phoneNumber),
+            AppSpacing.vGapBase,
+            const Divider(color: AppColors.border),
+            AppSpacing.vGapSm,
+            _buildDetailRow(Icons.email_outlined, user.email),
+            _buildDetailRow(Icons.phone_outlined, user.phoneNumber.isNotEmpty ? user.phoneNumber : 'Not provided'),
             if (user.address != null && user.address!.isNotEmpty)
-              _buildDetailRow(Icons.location_on_rounded, user.address!),
+              _buildDetailRow(Icons.location_on_outlined, user.address!),
             if (user.ngoRegistrationNumber != null && user.ngoRegistrationNumber!.isNotEmpty)
-              _buildDetailRow(Icons.badge_rounded, "Registration No: ${user.ngoRegistrationNumber}"),
-            const SizedBox(height: 24),
-            if (user.role == UserRole.ngo || user.status == 'pending') ...[
+              _buildDetailRow(Icons.badge_outlined, "Registration No: ${user.ngoRegistrationNumber}"),
+            if (user.maxDailyMeals > 0)
+              _buildDetailRow(Icons.restaurant_rounded, "Max Daily Meals: ${user.maxDailyMeals}"),
+            AppSpacing.vGapBase,
+            if (user.role == UserRole.ngo && status == 'pending') ...[
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
-                        Navigator.pop(context);
-                        _handleStatusUpdate(user.id, 'rejected');
+                        Navigator.pop(ctx);
+                        _handleStatusUpdate(user, 'rejected');
                       },
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        minimumSize: const Size(0, 50),
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
+                        minimumSize: const Size(0, 44),
                       ),
                       child: const Text("REJECT", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  AppSpacing.hGapMd,
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.pop(context);
-                        _handleStatusUpdate(user.id, 'approved');
+                        Navigator.pop(ctx);
+                        _handleStatusUpdate(user, 'approved');
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        minimumSize: const Size(0, 50),
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.borderMd),
+                        minimumSize: const Size(0, 44),
                       ),
                       child: const Text("APPROVE", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              AppSpacing.vGapSm,
             ],
           ],
         ),
@@ -291,111 +420,121 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     );
   }
 
-  void _handleStatusUpdate(String id, String status) async {
-    final success = await context.read<AdminViewModel>().updateNgoStatus(id, status);
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("NGO status updated to ${status.toUpperCase()}")),
-        );
-        _onSearch(page: _currentPage);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.read<AdminViewModel>().errorMessage ?? "Failed to update status")),
-        );
-      }
-    }
+  void _handleStatusUpdate(UserModel user, String status) {
+    final bool isApprove = status == 'approved';
+    UIUtils.showConfirmationDialog(
+      context: context,
+      title: isApprove ? "Approve NGO Account?" : "Reject NGO Account?",
+      message: isApprove
+          ? "Confirm approving ${user.name}? This activates their donation distribution features."
+          : "Are you sure you want to reject ${user.name}?",
+      confirmText: isApprove ? "APPROVE" : "REJECT",
+      confirmColor: isApprove ? AppColors.success : AppColors.error,
+      onConfirm: () async {
+        final success = await context.read<AdminViewModel>().updateNgoStatus(user.id, status);
+        if (mounted) {
+          if (success) {
+            UIUtils.showSnackBar(context, "${user.name} status updated to ${status.toUpperCase()}");
+            _loadData(page: _currentPage);
+          } else {
+            UIUtils.showErrorDialog(
+              context,
+              context.read<AdminViewModel>().errorMessage ?? "Failed to update status",
+            );
+          }
+        }
+      },
+    );
   }
 
   Widget _buildDetailRow(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.grey[600]),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w500))),
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          AppSpacing.hGapSm,
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildPaginationControls(AdminViewModel vm) {
-      return Container(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-          color: Colors.grey[50],
-          child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                  _buildPageButton(
-                      icon: Icons.arrow_back_ios_new_rounded,
-                      onTap: _currentPage > 1 ? () => _onSearch(page: _currentPage - 1) : null,
-                  ),
-                  const SizedBox(width: 24),
-                  Text("Page $_currentPage", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                  const SizedBox(width: 24),
-                  _buildPageButton(
-                      icon: Icons.arrow_forward_ios_rounded,
-                      onTap: vm.users.length == 10 ? () => _onSearch(page: _currentPage + 1) : null,
-                  ),
-              ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      color: AppColors.surfaceLight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildPageButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: _currentPage > 1 ? () => _loadData(page: _currentPage - 1) : null,
           ),
-      );
+          AppSpacing.hGapBase,
+          Text(
+            "Page $_currentPage of ${vm.userTotalPages > 0 ? vm.userTotalPages : 1}",
+            style: AppTypography.captionBold,
+          ),
+          AppSpacing.hGapBase,
+          _buildPageButton(
+            icon: Icons.chevron_right_rounded,
+            onTap: _currentPage < vm.userTotalPages ? () => _loadData(page: _currentPage + 1) : null,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPageButton({required IconData icon, VoidCallback? onTap}) {
-      return InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: onTap == null ? Colors.transparent : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-              ),
-              child: Icon(icon, size: 16, color: onTap == null ? Colors.grey[300] : Colors.black87),
-          ),
-      );
-  }
-
-  Widget _buildStatusChip(String status) {
-    final color = status == 'approved' ? Colors.teal : (status == 'pending' ? Colors.orange : Colors.red);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-      child: Text(status.toUpperCase(), style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.borderMd,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: onTap == null ? Colors.transparent : AppColors.backgroundLight,
+          borderRadius: AppRadius.borderMd,
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: onTap == null ? AppColors.border : AppColors.textPrimary,
+        ),
+      ),
     );
   }
 
   Color _getRoleColor(UserRole role) {
     switch (role) {
-      case UserRole.donor: return Colors.green;
-      case UserRole.ngo: return Colors.orange;
-      case UserRole.volunteer: return Colors.blue;
-      default: return Colors.grey;
+      case UserRole.donor:
+        return AppColors.donorColor;
+      case UserRole.ngo:
+        return AppColors.ngoColor;
+      case UserRole.volunteer:
+        return AppColors.info;
+      default:
+        return AppColors.adminColor;
     }
   }
 
   IconData _getRoleIcon(UserRole role) {
     switch (role) {
-      case UserRole.donor: return Icons.volunteer_activism_rounded;
-      case UserRole.ngo: return Icons.business_rounded;
-      case UserRole.volunteer: return Icons.directions_bike_rounded;
-      default: return Icons.person_rounded;
+      case UserRole.donor:
+        return Icons.volunteer_activism_rounded;
+      case UserRole.ngo:
+        return Icons.business_rounded;
+      case UserRole.volunteer:
+        return Icons.directions_bike_rounded;
+      default:
+        return Icons.person_rounded;
     }
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person_search_rounded, size: 64, color: Colors.grey[200]),
-          const SizedBox(height: 16),
-          const Text("No matches found", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-        ],
-      ),
-    );
   }
 }

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../viewmodels/donation_viewmodel.dart';
+import '../../viewmodels/live_map_viewmodel.dart';
 import '../../../data/models/donation_model.dart';
 import 'chat_screen.dart';
 import 'rating_screen.dart';
@@ -23,6 +24,7 @@ import 'widgets/primary_button.dart';
 import 'widgets/secondary_button.dart';
 import 'widgets/app_loading_indicator.dart';
 import 'widgets/empty_state.dart';
+import 'widgets/tracking_map_controls.dart';
 
 class DonationTrackingScreen extends StatefulWidget {
   final String donationId;
@@ -34,13 +36,56 @@ class DonationTrackingScreen extends StatefulWidget {
 
 class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
   final MapController _mapController = MapController();
+  late final LiveMapViewModel _liveMapVM;
+  String? _initializedDonationId;
 
   @override
   void initState() {
     super.initState();
+    _liveMapVM = LiveMapViewModel();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DonationViewModel>().fetchDonationDetails(widget.donationId);
     });
+  }
+
+  @override
+  void dispose() {
+    _liveMapVM.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _checkAndInitLiveTracking(DonationModel donation) {
+    if (_initializedDonationId != donation.id) {
+      _initializedDonationId = donation.id;
+      _liveMapVM.initTracking(donation, false);
+    }
+  }
+
+  void _fitRoute(DonationModel donation) {
+    final points = <LatLng>[
+      LatLng(donation.latitude, donation.longitude),
+      if (_liveMapVM.volunteerPos != null) _liveMapVM.volunteerPos!,
+      if (donation.ngoLat != null && donation.ngoLng != null && donation.ngoLat != 0 && donation.ngoLng != 0)
+        LatLng(donation.ngoLat!, donation.ngoLng!),
+      ..._liveMapVM.routePoints,
+    ];
+
+    if (points.isEmpty) return;
+
+    try {
+      if (points.length == 1) {
+        _mapController.move(points.first, 15);
+      } else {
+        final bounds = LatLngBounds.fromPoints(points);
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.only(top: 130, bottom: 220, left: 40, right: 40),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -48,68 +93,159 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
     final donation = context.watch<DonationViewModel>().currentDonation;
     final isLoading = context.watch<DonationViewModel>().isLoading;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
-      appBar: CustomAppBar(
-        title: "Track Rescue Mission",
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textPrimary),
-            onPressed: () => context.read<DonationViewModel>().fetchDonationDetails(widget.donationId),
-          ),
-        ],
-      ),
-      body: donation == null && isLoading
-          ? const AppLoadingIndicator(message: "Loading mission tracking...")
-          : donation == null
-              ? const EmptyState(
-                  icon: Icons.search_off_rounded,
-                  title: "Mission Not Found",
-                  message: "Donation details could not be loaded at this time.",
-                )
-              : Column(
-                  children: [
-                    _buildProgressStepper(donation.status),
-                    Expanded(
-                      child: Stack(
+    if (donation != null) {
+      _checkAndInitLiveTracking(donation);
+    }
+
+    return ChangeNotifierProvider<LiveMapViewModel>.value(
+      value: _liveMapVM,
+      child: Consumer<LiveMapViewModel>(
+        builder: (context, mapVM, _) {
+          return Scaffold(
+            backgroundColor: AppColors.backgroundLight,
+            appBar: CustomAppBar(
+              title: "Track Rescue Mission",
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: AppColors.textPrimary),
+                  tooltip: "Refresh Mission",
+                  onPressed: () {
+                    context.read<DonationViewModel>().fetchDonationDetails(widget.donationId);
+                    if (donation != null) {
+                      mapVM.refreshRoute(donation);
+                    }
+                  },
+                ),
+              ],
+            ),
+            body: donation == null && isLoading
+                ? const AppLoadingIndicator(message: "Loading mission tracking...")
+                : donation == null
+                    ? const EmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: "Mission Not Found",
+                        message: "Donation details could not be loaded at this time.",
+                      )
+                    : Column(
                         children: [
-                          FlutterMap(
-                            mapController: _mapController,
-                            options: MapOptions(
-                              initialCenter: LatLng(donation.latitude, donation.longitude),
-                              initialZoom: 14,
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.example.mca_app',
-                              ),
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: LatLng(donation.latitude, donation.longitude),
-                                    width: 50,
-                                    height: 50,
-                                    child: const Icon(Icons.location_on_rounded, color: AppColors.success, size: 45),
+                          _buildProgressStepper(donation.status),
+                          Expanded(
+                            child: Stack(
+                              children: [
+                                // Full Map with Live Road Polyline
+                                FlutterMap(
+                                  mapController: _mapController,
+                                  options: MapOptions(
+                                    initialCenter: LatLng(donation.latitude, donation.longitude),
+                                    initialZoom: 14,
                                   ),
-                                  if (donation.ngoLat != null && donation.ngoLng != null)
-                                    Marker(
-                                      point: LatLng(donation.ngoLat!, donation.ngoLng!),
-                                      width: 50,
-                                      height: 50,
-                                      child: const Icon(Icons.directions_car_rounded, color: AppColors.primary, size: 45),
+                                  children: [
+                                    TileLayer(
+                                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                      userAgentPackageName: 'com.example.mca_app',
                                     ),
-                                ],
-                              ),
-                            ],
+
+                                    // Road Polyline Layer
+                                    if (mapVM.routePoints.isNotEmpty)
+                                      PolylineLayer(
+                                        polylines: [
+                                          Polyline(
+                                            points: mapVM.routePoints,
+                                            strokeWidth: 4.5,
+                                            color: AppColors.primary,
+                                            borderStrokeWidth: 2.0,
+                                            borderColor: Colors.white,
+                                          ),
+                                        ],
+                                      ),
+
+                                    // Markers
+                                    MarkerLayer(
+                                      markers: [
+                                        // 1. Food Pickup Destination Marker
+                                        Marker(
+                                          point: LatLng(donation.latitude, donation.longitude),
+                                          width: 48,
+                                          height: 48,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: AppColors.success,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: Colors.white, width: 2.5),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: AppColors.success.withValues(alpha: 0.4),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 24),
+                                          ),
+                                        ),
+
+                                        // 2. Active NGO Volunteer Live Marker
+                                        if (mapVM.volunteerPos != null ||
+                                            (donation.ngoLat != null && donation.ngoLng != null && donation.ngoLat != 0 && donation.ngoLng != 0))
+                                          Marker(
+                                            point: mapVM.volunteerPos ?? LatLng(donation.ngoLat!, donation.ngoLng!),
+                                            width: 48,
+                                            height: 48,
+                                            child: Transform.rotate(
+                                              angle: mapVM.volunteerHeading * (3.14159 / 180),
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primary,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: Colors.white, width: 2.5),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: AppColors.primary.withValues(alpha: 0.4),
+                                                      blurRadius: 10,
+                                                      offset: const Offset(0, 3),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(Icons.directions_car_filled_rounded, color: Colors.white, size: 24),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+
+                                // Top Floating Tracking Info Card
+                                _buildTrackingInfoCard(donation, mapVM),
+
+                                // Floating Map Controls (Right Side)
+                                Positioned(
+                                  top: 170,
+                                  right: AppSpacing.md,
+                                  child: TrackingMapControls(
+                                    mapController: _mapController,
+                                    focusPoints: [
+                                      LatLng(donation.latitude, donation.longitude),
+                                      if (mapVM.volunteerPos != null) mapVM.volunteerPos!,
+                                      ...mapVM.routePoints,
+                                    ],
+                                    connectionStatus: mapVM.volunteerPos != null
+                                        ? TrackingConnectionStatus.live
+                                        : TrackingConnectionStatus.connecting,
+                                    onRecenter: () => _fitRoute(donation),
+                                  ),
+                                ),
+
+                                // Draggable Bottom Mission & Timeline Sheet
+                                _buildTimelinePanel(donation),
+                              ],
+                            ),
                           ),
-                          _buildTrackingInfoCard(donation),
-                          _buildTimelinePanel(donation),
                         ],
                       ),
-                    ),
-                  ],
-                ),
+          );
+        },
+      ),
     );
   }
 
@@ -189,25 +325,34 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
     );
   }
 
-  Widget _buildTrackingInfoCard(DonationModel donation) {
+  Widget _buildTrackingInfoCard(DonationModel donation, LiveMapViewModel mapVM) {
     final latestTime = donation.timeline.isNotEmpty ? DateFormat('h:mm a').format(donation.timeline.last.time.toLocal()) : null;
 
-    String distText = "Distance unavailable";
-    String etaText = "ETA unavailable";
-    if (donation.latitude != 0 && donation.longitude != 0 && donation.ngoLat != null && donation.ngoLng != null) {
-      final meters = Geolocator.distanceBetween(donation.latitude, donation.longitude, donation.ngoLat!, donation.ngoLng!);
+    // Use road-aware route distance when available; fallback to straight-line
+    String distText;
+    String etaText;
+    if (mapVM.hasActiveRoute && mapVM.routeDistanceKm > 0) {
+      distText = "${mapVM.routeDistanceKm.toStringAsFixed(1)} km road distance";
+      etaText = "~ ${mapVM.routeDurationMins > 0 ? mapVM.routeDurationMins : 1} mins";
+    } else if (donation.latitude != 0 && donation.longitude != 0 && (mapVM.volunteerPos != null || donation.ngoLat != null)) {
+      final vLat = mapVM.volunteerPos?.latitude ?? donation.ngoLat!;
+      final vLng = mapVM.volunteerPos?.longitude ?? donation.ngoLng!;
+      final meters = Geolocator.distanceBetween(donation.latitude, donation.longitude, vLat, vLng);
       final km = meters / 1000;
-      distText = "${km.toStringAsFixed(1)} km away";
+      distText = "${km.toStringAsFixed(1)} km direct estimate";
       final mins = (km / 30 * 60).round();
       etaText = "~ ${mins > 0 ? mins : 1} mins";
+    } else {
+      distText = "Locating rescue partner...";
+      etaText = "ETA calculating...";
     }
 
     final isCompleted = donation.status.toLowerCase() == 'completed' || donation.status.toLowerCase() == 'delivered';
 
     return Positioned(
-      top: AppSpacing.base,
-      left: AppSpacing.base,
-      right: AppSpacing.base,
+      top: AppSpacing.sm,
+      left: AppSpacing.md,
+      right: AppSpacing.md,
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceLight,
@@ -282,23 +427,31 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                         ))),
                         icon: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.primary),
                         style: IconButton.styleFrom(backgroundColor: AppColors.accent),
+                        tooltip: "Chat with NGO",
                       ),
                       AppSpacing.hGapXs,
                       IconButton(
                         onPressed: () => IntentUtils.makePhoneCall(donation.assignedNgoPhone!),
                         icon: const Icon(Icons.phone_rounded, color: AppColors.success),
                         style: IconButton.styleFrom(backgroundColor: AppColors.success.withValues(alpha: 0.1)),
+                        tooltip: "Call NGO",
                       ),
                     ],
                   ),
               ],
             ),
             if (donation.status == 'on_the_way' || donation.status == 'accepted') ...[
-              const Divider(height: 20, color: AppColors.border),
+              const Divider(height: 18, color: AppColors.border),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Estimated Arrival", style: AppTypography.bodySmall),
+                  Row(
+                    children: [
+                      const Icon(Icons.timer_outlined, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text("Estimated Arrival", style: AppTypography.bodySmall),
+                    ],
+                  ),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
                     child: Text(
@@ -365,9 +518,9 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
 
   Widget _buildTimelinePanel(DonationModel donation) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.14,
+      initialChildSize: 0.18,
       minChildSize: 0.14,
-      maxChildSize: 0.5,
+      maxChildSize: 0.55,
       builder: (context, scrollController) {
         final sortedTimeline = List<TimelineModel>.from(donation.timeline)
           ..sort((a, b) => a.time.compareTo(b.time));
@@ -391,7 +544,16 @@ class _DonationTrackingScreenState extends State<DonationTrackingScreen> {
                 ),
               ),
               AppSpacing.vGapBase,
-              Text("Rescue Timeline", style: AppTypography.sectionHeading),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Rescue Mission Timeline", style: AppTypography.sectionHeading),
+                  Text(
+                    "${sortedTimeline.length} events",
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
               AppSpacing.vGapLg,
               if (sortedTimeline.isEmpty)
                 Padding(

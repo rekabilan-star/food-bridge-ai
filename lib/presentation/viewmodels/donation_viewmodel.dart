@@ -74,7 +74,6 @@ class DonationViewModel extends ChangeNotifier {
           timeline: parsedTimeline.isNotEmpty ? parsedTimeline : _currentDonation!.timeline,
         );
       }
-      
       final index = _donations.indexWhere((d) => d.id == updatedId);
       if (index != -1 && newStatus != null) {
         _donations[index] = _donations[index].copyWith(
@@ -158,6 +157,22 @@ class DonationViewModel extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('[DonationViewModel] donation_claimed socket parse error: $e');
+      }
+    });
+
+    // Real-time listener for location_update: updates NGO live location on current tracked donation
+    _socketService.onLocationUpdated((data) {
+      try {
+        final String? donationId = data['donationId']?.toString();
+        final double? lat = (data['latitude'] is num) ? (data['latitude'] as num).toDouble() : null;
+        final double? lng = (data['longitude'] is num) ? (data['longitude'] as num).toDouble() : null;
+
+        if (_currentDonation != null && _currentDonation!.id == donationId && lat != null && lng != null) {
+          _currentDonation = _currentDonation!.copyWith(ngoLat: lat, ngoLng: lng);
+          _safeNotify();
+        }
+      } catch (e) {
+        debugPrint('[DonationViewModel] location_update parse error: $e');
       }
     });
   }

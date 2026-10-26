@@ -4,7 +4,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/donation_viewmodel.dart';
+import '../../viewmodels/live_map_viewmodel.dart';
+import '../../../core/services/socket_service.dart';
 import '../../../data/models/donation_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -16,6 +19,8 @@ import '../common/widgets/primary_button.dart';
 import '../common/widgets/secondary_button.dart';
 import '../common/widgets/status_badge.dart';
 import '../common/widgets/app_loading_indicator.dart';
+import '../common/widgets/tracking_map_controls.dart';
+import '../common/widgets/route_summary_card.dart';
 import 'qr_scanner_screen.dart';
 import 'delivery_confirmation_screen.dart';
 import '../common/chat_screen.dart';
@@ -33,12 +38,17 @@ class NgoTrackingScreen extends StatefulWidget {
 
 class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
   final MapController _mapController = MapController();
+  late final LiveMapViewModel _liveMapVM;
   StreamSubscription<Position>? _positionStream;
   bool _isActionLoading = false;
+  String? _initializedDonationId;
+  String? _gpsErrorMessage;
+  bool _isGpsPermissionDenied = false;
 
   @override
   void initState() {
     super.initState();
+    _liveMapVM = LiveMapViewModel();
     _initLocationTracking();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DonationViewModel>().fetchDonationDetails(widget.donationId);
@@ -48,84 +58,280 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _liveMapVM.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
   Future<void> _initLocationTracking() async {
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 10,
-    );
-
-    debugPrint('[GPS] Starting NGO tracking stream');
-    _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position position) {
-      debugPrint('[GPS] NGO Position update: Lat ${position.latitude}, Lng ${position.longitude}');
-      if (mounted) {
-        context.read<DonationViewModel>().updateNgoLocation(position.latitude, position.longitude);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          setState(() {
+            _gpsErrorMessage = "Device location services are disabled. Please enable GPS.";
+            _isGpsPermissionDenied = false;
+          });
+        }
+        return;
       }
-    });
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            setState(() {
+              _gpsErrorMessage = "Location permission is required to stream rescue navigation.";
+              _isGpsPermissionDenied = true;
+            });
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() {
+            _gpsErrorMessage = "Location permissions are permanently denied. Please enable in App Settings.";
+            _isGpsPermissionDenied = true;
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _gpsErrorMessage = null;
+          _isGpsPermissionDenied = false;
+        });
+      }
+
+      const locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 10,
+      );
+
+      debugPrint('[GPS] Starting NGO tracking stream');
+      _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position position) {
+        debugPrint('[GPS] NGO Position update: Lat ${position.latitude}, Lng ${position.longitude}');
+        if (mounted) {
+          context.read<DonationViewModel>().updateNgoLocation(position.latitude, position.longitude);
+
+          try {
+            final auth = context.read<AuthViewModel>();
+            final userId = auth.user?.id ?? '';
+            SocketService().updateLocation(
+              userId: userId,
+              donationId: widget.donationId,
+              latitude: position.latitude,
+              longitude: position.longitude,
+              heading: position.heading,
+              speed: position.speed,
+            );
+          } catch (_) {}
+
+          _liveMapVM.setManualVolunteerPosition(
+            LatLng(position.latitude, position.longitude),
+            heading: position.heading,
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('[GPS] Location tracking error: $e');
+      if (mounted) {
+        setState(() => _gpsErrorMessage = "Could not initialize GPS stream.");
+      }
+    }
+  }
+
+  void _checkAndInitRoute(DonationModel donation) {
+    if (_initializedDonationId != donation.id) {
+      _initializedDonationId = donation.id;
+      _liveMapVM.initTracking(donation, true);
+    }
+  }
+
+  void _fitRoute(DonationModel donation) {
+    final points = <LatLng>[
+      LatLng(donation.latitude, donation.longitude),
+      if (_liveMapVM.volunteerPos != null) _liveMapVM.volunteerPos!,
+      ..._liveMapVM.routePoints,
+    ];
+
+    if (points.isEmpty) return;
+
+    try {
+      if (points.length == 1) {
+        _mapController.move(points.first, 15);
+      } else {
+        final bounds = LatLngBounds.fromPoints(points);
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.only(top: 140, bottom: 220, left: 40, right: 40),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final donation = context.watch<DonationViewModel>().currentDonation;
 
-    return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
-      appBar: const CustomAppBar(title: "Rescue Navigation"),
-      body: donation == null
-          ? const AppLoadingIndicator(message: "Loading rescue details & route...")
-          : Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: LatLng(donation.latitude, donation.longitude),
-                    initialZoom: 15,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.mca_app',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: LatLng(donation.latitude, donation.longitude),
-                          width: 48,
-                          height: 48,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.35),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
+    if (donation != null) {
+      _checkAndInitRoute(donation);
+    }
+
+    return ChangeNotifierProvider<LiveMapViewModel>.value(
+      value: _liveMapVM,
+      child: Consumer<LiveMapViewModel>(
+        builder: (context, mapVM, _) {
+          return Scaffold(
+            backgroundColor: AppColors.backgroundLight,
+            appBar: const CustomAppBar(title: "Rescue Navigation"),
+            body: donation == null
+                ? const AppLoadingIndicator(message: "Loading rescue details & route...")
+                : Stack(
+                    children: [
+                      // Full Map with Live Road Polyline
+                      FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: LatLng(donation.latitude, donation.longitude),
+                          initialZoom: 15,
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.example.mca_app',
+                          ),
+
+                          // Live OSRM Road Polyline Layer
+                          if (mapVM.routePoints.isNotEmpty)
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: mapVM.routePoints,
+                                  strokeWidth: 4.5,
+                                  color: AppColors.primary,
+                                  borderStrokeWidth: 2.0,
+                                  borderColor: Colors.white,
                                 ),
                               ],
                             ),
-                            child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 28),
+
+                          // Markers
+                          MarkerLayer(
+                            markers: [
+                              // 1. Food Pickup Destination Marker
+                              Marker(
+                                point: LatLng(donation.latitude, donation.longitude),
+                                width: 48,
+                                height: 48,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.success.withValues(alpha: 0.35),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 24),
+                                ),
+                              ),
+
+                              // 2. NGO Self Vehicle Position Marker
+                              if (mapVM.volunteerPos != null)
+                                Marker(
+                                  point: mapVM.volunteerPos!,
+                                  width: 48,
+                                  height: 48,
+                                  child: Transform.rotate(
+                                    angle: mapVM.volunteerHeading * (3.14159 / 180),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white, width: 2.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primary.withValues(alpha: 0.4),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 24),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
+                        ],
+                      ),
+
+                      // Top Floating Status Pill & Route Summary
+                      Positioned(
+                        top: AppSpacing.md,
+                        left: AppSpacing.md,
+                        right: AppSpacing.md,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildTopStatusPill(donation),
+                            if (mapVM.routeDistanceKm > 0) ...[
+                              const SizedBox(height: AppSpacing.xs),
+                              RouteSummaryCard(
+                                distanceKm: mapVM.routeDistanceKm,
+                                durationMins: mapVM.routeDurationMins,
+                                routingSource: mapVM.routingSource,
+                                isLoading: mapVM.isLoadingRoute,
+                                lastUpdated: mapVM.lastLocationUpdate,
+                                onRefresh: () => mapVM.refreshRoute(donation),
+                              ),
+                            ],
+                            if (_gpsErrorMessage != null) ...[
+                              const SizedBox(height: AppSpacing.xs),
+                              _buildGpsWarningCard(),
+                            ],
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
 
-                // Top floating status pill
-                Positioned(
-                  top: AppSpacing.md,
-                  left: AppSpacing.lg,
-                  right: AppSpacing.lg,
-                  child: _buildTopStatusPill(donation),
-                ),
+                      // Floating Map Controls (Right Side)
+                      Positioned(
+                        top: 170,
+                        right: AppSpacing.md,
+                        child: TrackingMapControls(
+                          mapController: _mapController,
+                          focusPoints: [
+                            LatLng(donation.latitude, donation.longitude),
+                            if (mapVM.volunteerPos != null) mapVM.volunteerPos!,
+                            ...mapVM.routePoints,
+                          ],
+                          connectionStatus: _gpsErrorMessage != null
+                              ? TrackingConnectionStatus.offline
+                              : (mapVM.volunteerPos != null
+                                  ? TrackingConnectionStatus.live
+                                  : TrackingConnectionStatus.connecting),
+                          onRecenter: () => _fitRoute(donation),
+                        ),
+                      ),
 
-                // Bottom Action & Mission Panel
-                _buildActionPanel(donation),
-              ],
-            ),
+                      // Bottom Action & Mission Panel
+                      _buildActionPanel(donation),
+                    ],
+                  ),
+          );
+        },
+      ),
     );
   }
 
@@ -161,6 +367,43 @@ class _NgoTrackingScreenState extends State<NgoTrackingScreen> {
           StatusBadge(
             status: donation.status,
             label: StatusUtils.formatStatusLabel(donation.status).toUpperCase(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGpsWarningCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.location_off_rounded, size: 18, color: AppColors.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _gpsErrorMessage ?? "Location services unavailable",
+              style: AppTypography.caption.copyWith(color: AppColors.textPrimary, fontSize: 11),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (_isGpsPermissionDenied) {
+                Geolocator.openAppSettings();
+              } else {
+                Geolocator.openLocationSettings();
+              }
+              _initLocationTracking();
+            },
+            child: Text(
+              _isGpsPermissionDenied ? "SETTINGS" : "RETRY",
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
           ),
         ],
       ),

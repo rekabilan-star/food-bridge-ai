@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../core/utils/api_service.dart';
 import '../models/user_model.dart';
 import '../models/donation_model.dart';
+import '../models/sms_log_model.dart';
 
 class AdminRepository {
   final ApiService _apiService = ApiService();
@@ -52,10 +53,10 @@ class AdminRepository {
           'limit': limit,
         }..removeWhere((key, value) => value == null),
       );
-      final List data = response.data['data'];
+      final List data = response.data['data'] ?? [];
       return {
-          'pagination': response.data['pagination'],
-          'data': data.map((json) => UserModel.fromJson(json)).toList()
+        'pagination': response.data['pagination'] ?? {'total': data.length, 'page': page, 'pages': 1},
+        'data': data.map((json) => UserModel.fromJson(json)).toList()
       };
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch users";
@@ -73,10 +74,10 @@ class AdminRepository {
           'limit': limit,
         }..removeWhere((key, value) => value == null),
       );
-      final List data = response.data['data'];
+      final List data = response.data['data'] ?? [];
       return {
-          'pagination': response.data['pagination'],
-          'data': data.map((json) => UserModel.fromJson(json)).toList()
+        'pagination': response.data['pagination'] ?? {'total': data.length, 'page': page, 'pages': 1},
+        'data': data.map((json) => UserModel.fromJson(json)).toList()
       };
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch NGOs";
@@ -106,10 +107,10 @@ class AdminRepository {
           'limit': limit,
         }..removeWhere((key, value) => value == null),
       );
-      final List data = response.data['data'];
+      final List data = response.data['data'] ?? [];
       return {
-          'pagination': response.data['pagination'],
-          'data': data.map((json) => DonationModel.fromJson(json)).toList()
+        'pagination': response.data['pagination'] ?? {'total': data.length, 'page': page, 'pages': 1},
+        'data': data.map((json) => DonationModel.fromJson(json)).toList()
       };
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch all donations";
@@ -136,10 +137,40 @@ class AdminRepository {
           'endDate': end,
         }..removeWhere((key, value) => value == null),
       );
-      final List data = response.data['data'];
+      final List data = response.data['data'] ?? [];
       return data.map((json) => DonationModel.fromJson(json)).toList();
     } on DioException catch (e) {
       throw e.error ?? "Failed to fetch report data";
+    }
+  }
+
+  Future<Map<String, dynamic>> getSmsLogs({String? status, String? phoneNumber, int page = 1, int limit = 20}) async {
+    try {
+      final response = await _apiService.dio.get(
+        'admin/sms-logs',
+        queryParameters: {
+          'status': status,
+          'phoneNumber': phoneNumber,
+          'page': page,
+          'limit': limit,
+        }..removeWhere((key, value) => value == null),
+      );
+      final List data = response.data['data'] ?? [];
+      return {
+        'pagination': response.data['pagination'] ?? {'total': data.length, 'page': page, 'pages': 1},
+        'data': data.map((json) => SmsLogModel.fromJson(json)).toList()
+      };
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to fetch SMS logs";
+    }
+  }
+
+  Future<Map<String, dynamic>> getSmsStats() async {
+    try {
+      final response = await _apiService.dio.get('admin/sms-stats');
+      return response.data['data'] ?? {};
+    } on DioException catch (e) {
+      throw e.error ?? "Failed to fetch SMS stats";
     }
   }
 }

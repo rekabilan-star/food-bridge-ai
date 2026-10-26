@@ -34,6 +34,9 @@ class LiveMapViewModel extends ChangeNotifier {
   bool _isLoadingRoute = false;
   bool get isLoadingRoute => _isLoadingRoute;
 
+  DateTime? _lastLocationUpdate;
+  DateTime? get lastLocationUpdate => _lastLocationUpdate;
+
   // Refresh Control
   DateTime? _lastRouteFetchTime;
   LatLng? _lastRouteFetchPos;
@@ -43,12 +46,20 @@ class LiveMapViewModel extends ChangeNotifier {
   final String _eta = "--";
   String get eta => _eta;
 
+  bool get hasActiveRoute => _routePoints.isNotEmpty;
+
   void initTracking(DonationModel donation, bool isVolunteer) {
+    // Seed initial position from donation model if present
+    if (donation.ngoLat != null && donation.ngoLng != null && donation.ngoLat != 0 && donation.ngoLng != 0) {
+      _volunteerPos = LatLng(donation.ngoLat!, donation.ngoLng!);
+      _lastLocationUpdate = DateTime.now();
+    }
+
     if (isVolunteer) {
       _trackingService.startTracking(donation.id);
     }
 
-    _fetchRoute(donation.id);
+    _fetchRoute(donation);
 
     _trackingService.listenToLocation(donation.id, (data) {
       final newPos = LatLng(data['latitude'], data['longitude']);
@@ -57,9 +68,9 @@ class LiveMapViewModel extends ChangeNotifier {
         data['heading']?.toDouble() ?? 0,
       );
 
-      // Requirement 4 & 5: Intelligent Recalculation Check
+      // Intelligent Recalculation Check
       if (_shouldRecalculate(newPos)) {
-        _fetchRoute(donation.id, referencePos: newPos);
+        _fetchRoute(donation, referencePos: newPos);
       }
     });
   }
@@ -78,7 +89,7 @@ class LiveMapViewModel extends ChangeNotifier {
     // Check Distance Threshold (Deviation)
     final distanceMoved = Geolocator.distanceBetween(
       _lastRouteFetchPos!.latitude, _lastRouteFetchPos!.longitude,
-      currentPos.latitude, currentPos.longitude
+      currentPos.latitude, currentPos.longitude,
     );
 
     if (distanceMoved >= _deviationThresholdMeters) {
@@ -89,14 +100,18 @@ class LiveMapViewModel extends ChangeNotifier {
     return false;
   }
 
-  Future<void> _fetchRoute(String donationId, {LatLng? referencePos}) async {
-    if (_isLoadingRoute) return; // Requirement 6: Prevent duplicate requests
+  Future<void> refreshRoute(DonationModel donation) async {
+    await _fetchRoute(donation, force: true);
+  }
+
+  Future<void> _fetchRoute(DonationModel donation, {LatLng? referencePos, bool force = false}) async {
+    if (_isLoadingRoute && !force) return;
     
     _isLoadingRoute = true;
     notifyListeners();
 
     try {
-      final data = await _donationRepository.getDonationRoute(donationId);
+      final data = await _donationRepository.getDonationRoute(donation.id);
       if (data['success'] == true) {
         final List coords = data['coordinates'] ?? [];
         final List<LatLng> points = coords.map((c) => LatLng(c[1], c[0])).toList();
@@ -109,19 +124,43 @@ class LiveMapViewModel extends ChangeNotifier {
         // Update Reference State
         _lastRouteFetchTime = DateTime.now();
         _lastRouteFetchPos = referencePos ?? _volunteerPos;
+      } else {
+        _applyDirectEstimateFallback(donation);
       }
     } catch (e) {
-      debugPrint('[LiveMapViewModel] Error fetching route: $e');
-      _routingSource = "ERROR";
+      debugPrint('[LiveMapViewModel] Error fetching route: $e. Applying direct estimate fallback.');
+      _applyDirectEstimateFallback(donation);
     } finally {
       _isLoadingRoute = false;
       notifyListeners();
     }
   }
 
+  void _applyDirectEstimateFallback(DonationModel donation) {
+    final startPos = _volunteerPos;
+    final destPos = LatLng(donation.latitude, donation.longitude);
+
+    if (startPos != null && donation.latitude != 0 && donation.longitude != 0) {
+      final meters = Geolocator.distanceBetween(
+        startPos.latitude, startPos.longitude,
+        destPos.latitude, destPos.longitude,
+      );
+      _routePoints = [startPos, destPos];
+      _routeDistanceKm = meters / 1000;
+      final mins = (_routeDistanceKm / 30 * 60).round();
+      _routeDurationMins = mins > 0 ? mins : 1;
+      _routingSource = "DIRECT_ESTIMATE";
+      _lastRouteFetchTime = DateTime.now();
+      _lastRouteFetchPos = startPos;
+    } else {
+      _routingSource = "ERROR";
+    }
+  }
+
   void _updateVolunteerPosition(LatLng newPos, double heading) async {
     _volunteerPos = newPos;
     _volunteerHeading = heading;
+    _lastLocationUpdate = DateTime.now();
 
     // Reverse Geocoding
     try {
@@ -135,10 +174,19 @@ class LiveMapViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setRoute(List<LatLng> points, double distanceKm, int durationMins) {
+  void setManualVolunteerPosition(LatLng pos, {double heading = 0}) {
+    _volunteerPos = pos;
+    _volunteerHeading = heading;
+    _lastLocationUpdate = DateTime.now();
+    notifyListeners();
+  }
+
+  void setRoute(List<LatLng> points, double distanceKm, int durationMins, {String source = "OSRM"}) {
     _routePoints = points;
     _routeDistanceKm = distanceKm;
     _routeDurationMins = durationMins;
+    _routingSource = source;
+    _lastRouteFetchTime = DateTime.now();
     notifyListeners();
   }
 
@@ -146,6 +194,7 @@ class LiveMapViewModel extends ChangeNotifier {
     _routePoints = [];
     _routeDistanceKm = 0;
     _routeDurationMins = 0;
+    _routingSource = "NONE";
     notifyListeners();
   }
 

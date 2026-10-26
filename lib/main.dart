@@ -8,6 +8,7 @@ import 'presentation/viewmodels/chat_viewmodel.dart';
 import 'presentation/viewmodels/delivery_viewmodel.dart';
 import 'presentation/viewmodels/route_optimization_viewmodel.dart';
 import 'presentation/viewmodels/notification_viewmodel.dart';
+import 'presentation/viewmodels/live_map_viewmodel.dart';
 import 'core/providers/location_provider_v2.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/views/auth/login_screen.dart';
@@ -41,6 +42,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => DeliveryViewModel()),
         ChangeNotifierProvider(create: (_) => RouteOptimizationViewModel()),
         ChangeNotifierProvider(create: (_) => NotificationViewModel()),
+        ChangeNotifierProvider(create: (_) => LiveMapViewModel()),
         ChangeNotifierProvider(create: (_) => LocationProviderV2()),
       ],
       child: const MyApp(),

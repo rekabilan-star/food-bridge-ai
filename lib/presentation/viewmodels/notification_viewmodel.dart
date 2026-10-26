@@ -41,6 +41,20 @@ class NotificationViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  bool _mockMode = false;
+
+  void enableMockMode() {
+    _mockMode = true;
+  }
+
+  void setTestNotifications(List<NotificationModel> testItems, {int unread = 0}) {
+    _notifications = List.from(testItems);
+    _unreadCount = unread;
+    _isLoading = false;
+    _errorMessage = null;
+    _safeNotify();
+  }
+
   List<NotificationModel> _notifications = [];
   int _unreadCount = 0;
   bool _isLoading = false;
@@ -126,6 +140,12 @@ class NotificationViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchNotifications({bool refresh = false}) async {
+    if (_mockMode) {
+      _isLoading = false;
+      _isMoreLoading = false;
+      _safeNotify();
+      return;
+    }
     if (_isLoading || _isMoreLoading) return;
 
     if (refresh) {

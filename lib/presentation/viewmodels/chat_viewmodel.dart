@@ -24,6 +24,26 @@ class ChatViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  bool _mockMode = false;
+
+  void enableMockMode() {
+    _mockMode = true;
+  }
+
+  void setTestChats(List<ChatModel> testChats) {
+    _chats = List.from(testChats);
+    _isLoading = false;
+    _errorMessage = null;
+    _safeNotify();
+  }
+
+  void setTestMessages(List<MessageModel> testMessages) {
+    _messages = List.from(testMessages);
+    _isMessagesLoading = false;
+    _errorMessage = null;
+    _safeNotify();
+  }
+
   List<ChatModel> _chats = [];
   List<MessageModel> _messages = [];
   String? _activeChatId;
@@ -97,6 +117,11 @@ class ChatViewModel extends ChangeNotifier {
   String getUserStatus(String userId) => _userStatuses[userId] ?? 'offline';
 
   Future<void> fetchChats() async {
+    if (_mockMode) {
+      _isLoading = false;
+      _safeNotify();
+      return;
+    }
     _isLoading = true;
     _safeNotify();
     try {
@@ -111,6 +136,12 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchMessages(String chatId) async {
+    _activeChatId = chatId;
+    if (_mockMode) {
+      _isMessagesLoading = false;
+      _safeNotify();
+      return;
+    }
     _isMessagesLoading = true;
     _messages = [];
     _activeChatId = chatId;

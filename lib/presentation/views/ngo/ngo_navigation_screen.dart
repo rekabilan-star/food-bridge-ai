@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/providers/location_provider_v2.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -10,6 +12,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../common/widgets/custom_app_bar.dart';
 import '../common/widgets/primary_button.dart';
 import '../common/widgets/secondary_button.dart';
+import '../common/widgets/tracking_map_controls.dart';
 import 'qr_scanner_screen.dart';
 
 class NgoNavigationScreen extends StatefulWidget {
@@ -30,7 +33,6 @@ class NgoNavigationScreen extends StatefulWidget {
 class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
   final MapController _mapController = MapController();
   late final LatLng _destination;
-  final LatLng _currentPos = const LatLng(13.0827, 80.2707);
 
   @override
   void initState() {
@@ -39,6 +41,12 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
       widget.destinationLat ?? 13.0475,
       widget.destinationLng ?? 80.2520,
     );
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
   }
 
   Future<void> _launchMaps() async {
@@ -55,8 +63,25 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
     }
   }
 
+  void _fitRoute(LatLng currentPos) {
+    try {
+      final bounds = LatLngBounds.fromPoints([currentPos, _destination]);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.only(top: 100, bottom: 200, left: 40, right: 40),
+        ),
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocationProviderV2>().location;
+    final currentPos = (loc != null && loc.latitude != 0)
+        ? LatLng(loc.latitude, loc.longitude)
+        : const LatLng(13.0827, 80.2707);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: const CustomAppBar(title: "Navigating to Pickup"),
@@ -65,7 +90,7 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _currentPos,
+              initialCenter: currentPos,
               initialZoom: 14,
             ),
             children: [
@@ -73,31 +98,79 @@ class _NgoNavigationScreenState extends State<NgoNavigationScreen> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.mca_app',
               ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: [currentPos, _destination],
+                    strokeWidth: 4.0,
+                    color: AppColors.primary,
+                    borderStrokeWidth: 1.5,
+                    borderColor: Colors.white,
+                  ),
+                ],
+              ),
               MarkerLayer(
                 markers: [
+                  // Origin / NGO Position Marker
+                  Marker(
+                    point: currentPos,
+                    width: 44,
+                    height: 44,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+
+                  // Destination Marker
                   Marker(
                     point: _destination,
                     width: 48,
                     height: 48,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: AppColors.success,
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2.5),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
+                            color: AppColors.success.withValues(alpha: 0.35),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 28),
+                      child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 26),
                     ),
                   ),
                 ],
               ),
             ],
           ),
+
+          // Floating Map Controls (Right Side)
+          Positioned(
+            top: AppSpacing.lg,
+            right: AppSpacing.md,
+            child: TrackingMapControls(
+              mapController: _mapController,
+              focusPoints: [currentPos, _destination],
+              connectionStatus: TrackingConnectionStatus.live,
+              onRecenter: () => _fitRoute(currentPos),
+            ),
+          ),
+
           _buildInfoPanel(),
         ],
       ),

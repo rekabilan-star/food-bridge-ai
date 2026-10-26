@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/donation_model.dart';
+import '../../data/models/sms_log_model.dart';
 import '../../data/repositories/admin_repository.dart';
 import '../../core/services/socket_service.dart';
 
@@ -8,6 +9,7 @@ class AdminViewModel extends ChangeNotifier {
   final AdminRepository _repository = AdminRepository();
   final SocketService _socketService = SocketService();
   bool _disposed = false;
+  bool _mockMode = false;
 
   void _safeNotify() {
     if (!_disposed) notifyListeners();
@@ -25,24 +27,72 @@ class AdminViewModel extends ChangeNotifier {
   List<UserModel> _users = [];
   List<UserModel> _ngos = [];
   List<DonationModel> _donations = [];
+  List<SmsLogModel> _smsLogs = [];
+  Map<String, dynamic> _smsStats = {};
   
   bool _isLoading = false;
   String? _errorMessage;
 
-  // Pagination states (accessible via getters if needed)
+  // Pagination states
   int userPage = 1;
   int userTotalPages = 1;
   int ngoPage = 1;
   int ngoTotalPages = 1;
   int donationPage = 1;
   int donationTotalPages = 1;
+  int smsPage = 1;
+  int smsTotalPages = 1;
 
   Map<String, dynamic> get stats => _stats;
   List<UserModel> get users => _users;
   List<UserModel> get ngos => _ngos;
   List<DonationModel> get donations => _donations;
+  List<SmsLogModel> get smsLogs => _smsLogs;
+  Map<String, dynamic> get smsStats => _smsStats;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  List<dynamic> get statusDistribution {
+    if (_stats.containsKey('counts') && _stats['counts']?['statusDistribution'] is List) {
+      return _stats['counts']['statusDistribution'] as List<dynamic>;
+    }
+    return [];
+  }
+
+  // Testing & Mock Helpers
+  void enableMockMode() {
+    _mockMode = true;
+  }
+
+  void setTestStats(Map<String, dynamic> testStats) {
+    _stats = testStats;
+    _safeNotify();
+  }
+
+  void setTestUsers(List<UserModel> testUsers) {
+    _users = testUsers;
+    _safeNotify();
+  }
+
+  void setTestNgos(List<UserModel> testNgos) {
+    _ngos = testNgos;
+    _safeNotify();
+  }
+
+  void setTestDonations(List<DonationModel> testDonations) {
+    _donations = testDonations;
+    _safeNotify();
+  }
+
+  void setTestSmsLogs(List<SmsLogModel> testLogs) {
+    _smsLogs = testLogs;
+    _safeNotify();
+  }
+
+  void setTestSmsStats(Map<String, dynamic> testStats) {
+    _smsStats = testStats;
+    _safeNotify();
+  }
 
   void initSocketListeners() {
     if (!_socketService.isConnected) return;
@@ -64,6 +114,7 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchDashboardStats() async {
+    if (_mockMode) return;
     if (_isLoading) return;
     _setLoading(true);
     try {
@@ -76,49 +127,49 @@ class AdminViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchUsers({String? role, String? status, String? search, int page = 1}) async {
+    if (_mockMode) return;
     if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getUsers(role: role, status: status, search: search, page: page);
-      _users = result['data'];
-      userPage = result['pagination']['page'];
-      userTotalPages = result['pagination']['pages'];
+      _users = List<UserModel>.from(result['data'] ?? []);
+      userPage = result['pagination']?['page'] ?? 1;
+      userTotalPages = result['pagination']?['pages'] ?? 1;
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
-      _users = [];
     }
     _setLoading(false);
   }
 
   Future<void> fetchNgos({String? status, String? search, int page = 1}) async {
+    if (_mockMode) return;
     if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getNgos(status: status, search: search, page: page);
-      _ngos = List<UserModel>.from(result['data']);
-      ngoPage = result['pagination']['page'] ?? 1;
-      ngoTotalPages = result['pagination']['pages'] ?? 1;
+      _ngos = List<UserModel>.from(result['data'] ?? []);
+      ngoPage = result['pagination']?['page'] ?? 1;
+      ngoTotalPages = result['pagination']?['pages'] ?? 1;
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
-      _ngos = [];
     }
     _setLoading(false);
   }
 
   Future<void> fetchAllDonations({String? status, String? category, String? search, int page = 1}) async {
+    if (_mockMode) return;
     if (_isLoading) return;
     _setLoading(true);
     try {
       final result = await _repository.getAllDonations(status: status, category: category, search: search, page: page);
-      _donations = result['data'];
-      donationPage = result['pagination']['page'];
-      donationTotalPages = result['pagination']['pages'];
+      _donations = List<DonationModel>.from(result['data'] ?? []);
+      donationPage = result['pagination']?['page'] ?? 1;
+      donationTotalPages = result['pagination']?['pages'] ?? 1;
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
-      _donations = [];
     }
     _setLoading(false);
   }
@@ -136,8 +187,8 @@ class AdminViewModel extends ChangeNotifier {
 
     _ngos.removeWhere((n) => n.id == id);
     _users.removeWhere((u) => u.id == id);
-    if (_stats.containsKey('counts') && _stats['counts'].containsKey('pendingNGOs')) {
-      final count = _stats['counts']['pendingNGOs'] as int;
+    if (_stats.containsKey('counts') && _stats['counts'] != null && _stats['counts'].containsKey('pendingNGOs')) {
+      final count = _stats['counts']['pendingNGOs'] as int? ?? 0;
       if (count > 0 && status == 'approved') {
         _stats['counts']['pendingNGOs'] = count - 1;
       }
@@ -149,21 +200,48 @@ class AdminViewModel extends ChangeNotifier {
   Future<void> sendAnnouncement(String title, String body, {String targetRole = 'all'}) async {
     _setLoading(true);
     try {
-        await _repository.sendAnnouncement(title, body, targetRole: targetRole);
-        _errorMessage = null;
+      await _repository.sendAnnouncement(title, body, targetRole: targetRole);
+      _errorMessage = null;
     } catch (e) {
-        _errorMessage = e.toString();
-        rethrow;
+      _errorMessage = e.toString();
+      _setLoading(false);
+      rethrow;
     }
     _setLoading(false);
   }
 
   Future<List<DonationModel>> fetchReportData({String? start, String? end}) async {
     try {
-        return await _repository.getReportDonations(start: start, end: end);
+      return await _repository.getReportDonations(start: start, end: end);
     } catch (e) {
-        _errorMessage = e.toString();
-        return [];
+      _errorMessage = e.toString();
+      return [];
+    }
+  }
+
+  Future<void> fetchSmsLogs({String? status, String? phoneNumber, int page = 1}) async {
+    if (_mockMode) return;
+    if (_isLoading) return;
+    _setLoading(true);
+    try {
+      final result = await _repository.getSmsLogs(status: status, phoneNumber: phoneNumber, page: page);
+      _smsLogs = List<SmsLogModel>.from(result['data'] ?? []);
+      smsPage = result['pagination']?['page'] ?? 1;
+      smsTotalPages = result['pagination']?['pages'] ?? 1;
+      _errorMessage = null;
+    } catch (e) {
+      _errorMessage = e.toString();
+    }
+    _setLoading(false);
+  }
+
+  Future<void> fetchSmsStats() async {
+    if (_mockMode) return;
+    try {
+      _smsStats = await _repository.getSmsStats();
+      _safeNotify();
+    } catch (e) {
+      _smsStats = {};
     }
   }
 }
